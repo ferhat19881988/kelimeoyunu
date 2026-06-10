@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mira ve Nehir Kelime Zinciri Oyunu</title>
+  <title>Mira & Nehir'in Kelime Oyunu</title>
   <style>
     :root {
       --bg1: #eef7ff;
@@ -444,7 +444,7 @@
         <div class="badge">🎯 Mira & Nehir'in Kelime Oyunu</div>
         <h1>Kelime Tamamlama Oyunu</h1>
         <p class="lead">
-          İki kişilik zincir kelime oyunu. Bir oyuncu 5 kelime yazar, diğer oyuncu ilk kelimeyi ipucu alarak
+          İki kişilik zincir kelime oyunu. Bir oyuncu seçilen sayıda kelime yazar, diğer oyuncu ilk kelimeyi ipucu alarak
           sıradaki kelimeleri bulmaya çalışır.
         </p>
 
@@ -482,6 +482,11 @@
           <button class="btn-secondary" onclick="showRules()">Kuralları Göster</button>
           <button class="btn-light" onclick="exitGame()">Oyundan Çık</button>
         </div>
+
+        <p class="footer-note">
+          Not: Kelime tamamlamaları yerel örnek liste ve Türkçe Vikipedi aramasıyla kontrol edilir.
+          Bağlantı yoksa oyun yerel liste ve itiraz sistemiyle devam eder.
+        </p>
 
       </div>
     </section>
@@ -621,34 +626,83 @@
   </div>
 
   <script>
-    const LOCAL_VALID_PAIRS = new Set([
+    const RAW_LOCAL_VALID_PAIRS = [
       "TAHTA KALEMİ", "TAHTA KALEM",
-      "KALEM UCU", "KALEM UÇU",
-      "UÇ KUTUSU", "UÇ KUTU",
-      "OKUL ÇANTASI", "ÇANTA FERMUARI", "FERMUAR DİŞİ",
-      "DİŞ FIRÇASI", "FIRÇA SAPI",
-      "SU ŞİŞESİ", "ŞİŞE KAPAĞI",
-      "KAPI KOLU", "KOL SAATİ",
-      "SAAT KAYIŞI", "KAYIŞ TOKASI",
-      "MASA AYAĞI", "AYAKKABI BAĞI",
-      "BAHÇE KAPISI", "KAPI ZİLİ",
-      "TELEFON EKRANI", "EKRAN KORUYUCU",
-      "KİTAP KAPAĞI", "KAPAK RESMİ",
-      "SINIF DEFTERİ", "DEFTER KENARI",
-      "RENK KALEMİ", "BOYA KALEMİ",
-      "PENCERE CAMI", "CAM SİLESİ",
-      "OYUN KARTI", "KART KUTUSU",
-      "ÇAY BARDAĞI", "BARDAK ALTLIĞI",
-      "EV ANAHTARI", "ANAHTAR DELİĞİ",
-      "GÖZLÜK CAMI", "CAM KENARI",
-      "RESİM DEFTERİ", "DEFTER KAPAĞI",
-      "BİLGİSAYAR FARESİ", "FARE ALTLIĞI"
-    ]);
+      "KALEM UCU", "KALEM UÇU", "KALEM KUTUSU", "KALEM ÇANTASI", "KALEM TIRAŞI",
+      "UÇ KUTUSU", "UÇ KALEMİ",
+      "OKUL ÇANTASI", "OKUL BAHÇESİ", "OKUL KAPISI", "OKUL SERVİSİ", "OKUL FORMASI",
+      "ÇANTA FERMUARI", "ÇANTA KULBU", "ÇANTA ASKISI", "ÇANTA GÖZÜ",
+      "FERMUAR DİŞİ", "FERMUAR BAŞI",
+      "DİŞ FIRÇASI", "DİŞ MACUNU", "DİŞ HEKİMİ",
+      "FIRÇA SAPI", "FIRÇA KILI",
+      "SU ŞİŞESİ", "SU BARDAĞI", "SU BORUSU", "SU DEPOSU", "SU BİRİKİNTİSİ",
+      "ŞİŞE KAPAĞI", "ŞİŞE AĞZI",
+      "KAPI KOLU", "KAPI ZİLİ", "KAPI ANAHTARI", "KAPI KİLİDİ", "KAPI EŞİĞİ",
+      "KOL SAATİ", "KOL DÜĞMESİ", "KOL ÇANTASI",
+      "SAAT KAYIŞI", "SAAT KULESİ", "SAAT CAMI",
+      "KAYIŞ TOKASI", "TOKA KUTUSU",
+      "MASA AYAĞI", "MASA ÖRTÜSÜ", "MASA LAMBASI", "MASA TENİSİ", "MASA KENARI",
+      "AYAKKABI BAĞI", "AYAKKABI BOYASI", "AYAKKABI KUTUSU", "AYAKKABI TABANI",
+      "BAHÇE KAPISI", "BAHÇE DUVARI", "BAHÇE HORTUMU", "BAHÇE ÇİÇEĞİ",
+      "TELEFON EKRANI", "TELEFON KILIFI", "TELEFON ŞARJI", "TELEFON NUMARASI",
+      "EKRAN KORUYUCU", "EKRAN PARLAKLIĞI",
+      "KİTAP KAPAĞI", "KİTAP AYRACI", "KİTAP SAYFASI", "KİTAP RAFI",
+      "KAPAK RESMİ", "KAPAK YAZISI",
+      "SINIF DEFTERİ", "SINIF KAPISI", "SINIF TAHTASI", "SINIF DOLABI",
+      "DEFTER KENARI", "DEFTER KAPAĞI", "DEFTER SAYFASI",
+      "RENK KALEMİ", "BOYA KALEMİ", "BOYA KUTUSU", "BOYA FIRÇASI",
+      "PENCERE CAMI", "PENCERE KENARI", "PENCERE KOLU", "PENCERE PERDESİ",
+      "CAM SİLESİ", "CAM KENARI", "CAM BARDAK", "CAM BARDAĞI",
+      "OYUN KARTI", "OYUN HAMURU", "OYUN ALANI", "OYUN KURALI",
+      "KART KUTUSU", "KART OYUNU",
+      "ÇAY BARDAĞI", "ÇAY KAŞIĞI", "ÇAY TABAĞI", "ÇAY DEMLİĞİ",
+      "BARDAK ALTLIĞI", "BARDAK KULBU", "BARDAK KAPAĞI",
+      "EV ANAHTARI", "EV KAPISI", "EV TELEFONU", "EV ADRESİ", "EV ÖDEVİ",
+      "ANAHTAR DELİĞİ", "ANAHTAR HALKASI",
+      "GÖZLÜK CAMI", "GÖZLÜK KABI", "GÖZLÜK ÇERÇEVESİ",
+      "RESİM DEFTERİ", "RESİM KAĞIDI", "RESİM ÇERÇEVESİ", "RESİM BOYASI",
+      "BİLGİSAYAR FARESİ", "BİLGİSAYAR EKRANI", "BİLGİSAYAR KLAVYESİ", "BİLGİSAYAR OYUNU",
+      "FARE ALTLIĞI", "FARE TUŞU",
+      "ARABA KAPISI", "ARABA LASTİĞİ", "ARABA ANAHTARI", "ARABA CAMI", "ARABA KOLTUĞU",
+      "KOLTUK KILIFI", "KOLTUK AYAĞI",
+      "ÇORAP TEKİ", "ÇORAP ÇİFTİ",
+      "ELBİSE DOLABI", "DOLAP KAPAĞI", "DOLAP KULBU",
+      "ODA KAPISI", "ODA LAMBASI", "ODA ANAHTARI",
+      "LAMBA DÜĞMESİ", "LAMBA IŞIĞI",
+      "KAĞIT HAVLU", "KAĞIT PARA", "KAĞIT UÇAĞI",
+      "PARA KUTUSU", "PARA ÇANTASI",
+      "SAÇ TOKASI", "SAÇ FIRÇASI", "SAÇ BAĞI",
+      "KUTU KAPAĞI", "KUTU KENARI",
+      "TOP AĞI", "TOP SEPETİ", "FUTBOL TOPU", "BASKETBOL TOPU",
+      "YEMEK MASASI", "YEMEK KAŞIĞI", "YEMEK TABAĞI",
+      "TABAK KENARI", "KAŞIK SAPI", "ÇATAL SAPI",
+      "DUVAR SAATİ", "DUVAR BOYASI", "DUVAR KAĞIDI",
+      "PERDE KORNİŞİ", "PERDE ÇUBUĞU",
+      "ÇİÇEK SAKSISI", "SAKSI TOPRAĞI",
+      "TOPRAK KOKUSU", "TOPRAK RENGİ",
+      "KÖPEK TASMASI", "KEDİ MAMASI", "KUŞ KAFESİ",
+      "KAFES KAPISI", "MAMA KABI",
+      "SÜT ŞİŞESİ", "SÜT BARDAĞI",
+      "EKMEK SEPETİ", "EKMEK DİLİMİ",
+      "MEYVE TABAĞI", "MEYVE SUYU",
+      "KULAKLIK KABLOSU", "KABLO UCU", "ŞARJ KABLOSU",
+      "KUMANDA PİLİ", "PİL YUVASI",
+      "TELEVİZYON EKRANI", "TELEVİZYON KUMANDASI",
+      "KAPI PASPASI", "PASPAS KENARI",
+      "HALI DESENİ", "HALI SAÇAĞI",
+      "MERDİVEN BASAMAĞI", "BASAMAK KENARI",
+      "ÇANTA CEBİ", "CEKET CEBİ", "CEKET DÜĞMESİ",
+      "GÖMLEK YAKASI", "YAKA DÜĞMESİ",
+      "PANTOLON CEBİ", "PANTOLON PAÇASI",
+      "BİLET KONTROLÜ", "TREN BİLETİ", "OTOBÜS BİLETİ"
+    ];
+
+    const LOCAL_VALID_PAIRS = new Set(RAW_LOCAL_VALID_PAIRS.map(normalizeText));
 
     const state = {
       p1: "Mira",
       p2: "Nehir",
-      totalSeries: 5,
+      totalSeries: 2,
       wordCount: 5,
       currentSeries: 1,
       startSetter: 1,
@@ -660,7 +714,9 @@
       attemptsLeft: 5,
       hadMistake: false,
       onlineCheck: true,
-      lastSettings: null
+      lastSettings: null,
+      entryChecking: false,
+      challengeChecking: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -789,6 +845,8 @@
       state.guessIndex = 1;
       state.attemptsLeft = 5;
       state.hadMistake = false;
+      state.entryChecking = false;
+      state.challengeChecking = false;
     }
 
     function showEntry() {
@@ -826,6 +884,8 @@
     }
 
     async function confirmEntryWord() {
+      if (state.entryChecking || state.words.length >= state.wordCount) return;
+
       const input = $("entryWord");
       const word = cleanSingleWord(input.value);
       input.value = word;
@@ -842,55 +902,60 @@
         return;
       }
 
+      state.entryChecking = true;
       $("confirmWordBtn").disabled = true;
       setMessage("entryMessage", "Kelime kontrol ediliyor...", "warn");
 
-      if (state.words.length > 0) {
-        const previous = state.words[state.words.length - 1];
-        const result = await validatePair(previous, word);
+      try {
+        if (state.words.length > 0) {
+          const previous = state.words[state.words.length - 1];
+          const result = await validatePair(previous, word);
 
-        if (result.status === "invalid") {
-          playTone("error");
-          $("confirmWordBtn").disabled = false;
-          setMessage(
-            "entryMessage",
-            `Bu kelime bir önceki kelimeyi uygun şekilde tamamlamıyor. Başka bir kelime dene.`,
-            "bad"
-          );
-          return;
-        }
+          if (result.status === "invalid") {
+            playTone("error");
+            setMessage(
+              "entryMessage",
+              `Bu kelime bir önceki kelimeyi uygun şekilde tamamlamıyor. Başka bir kelime dene.<br><span class="small">Kontrol: ${result.detail}</span>`,
+              "bad"
+            );
+            return;
+          }
 
-        if (result.status === "uncertain") {
-          playTone("warning");
-          setMessage(
-            "entryMessage",
-            `Kelime kaydedildi. Gerekirse oyun sırasında itiraz hakkı kullanılabilir.`,
-            "warn"
-          );
+          if (result.status === "uncertain") {
+            playTone("warning");
+            setMessage(
+              "entryMessage",
+              `Kelime kaydedildi; kesin kanıt bulunamadı. Gerekirse oyun sırasında itiraz hakkı kullanılabilir.<br><span class="small">Kontrol: ${result.detail}</span>`,
+              "warn"
+            );
+          } else {
+            playTone("success");
+            setMessage(
+              "entryMessage",
+              `Kelime onaylandı. Sıradaki kelimeyi yaz.<br><span class="small">Kontrol: ${result.detail}</span>`,
+              "good"
+            );
+          }
         } else {
           playTone("success");
-          setMessage(
-            "entryMessage",
-            `Kelime onaylandı. Sıradaki kelimeyi yaz.`,
-            "good"
-          );
+          setMessage("entryMessage", "İlk kelime onaylandı. Şimdi bu kelimeyi tamamlayacak 2. kelimeyi yaz.", "good");
         }
-      } else {
-        playTone("success");
-        setMessage("entryMessage", "İlk kelime onaylandı. Şimdi bu kelimeyi tamamlayacak 2. kelimeyi yaz.", "good");
-      }
 
-      state.words.push(word);
-      input.value = "";
-      updateEntryChain();
-      updateEntryLabel();
-      $("confirmWordBtn").disabled = state.words.length >= 5;
-      $("passToGuesserBtn").disabled = state.words.length !== state.wordCount;
+        state.words.push(word);
+        input.value = "";
+        updateEntryChain();
+        updateEntryLabel();
+        $("confirmWordBtn").disabled = state.words.length >= state.wordCount;
+        $("passToGuesserBtn").disabled = state.words.length !== state.wordCount;
 
-      if (state.words.length === 5) {
-        setMessage("entryMessage", "5 kelime hazır. Şimdi “İkinci Kişiye Geç” butonuna bas.", "good");
-      } else {
-        setTimeout(() => input.focus(), 80);
+        if (state.words.length === state.wordCount) {
+          setMessage("entryMessage", `${state.wordCount} kelime hazır. Şimdi “İkinci Kişiye Geç” butonuna bas.`, "good");
+        } else {
+          setTimeout(() => input.focus(), 80);
+        }
+      } finally {
+        state.entryChecking = false;
+        updateEntryLabel();
       }
     }
 
@@ -1056,42 +1121,47 @@
     }
 
     async function challengeCurrentWord() {
-      if (state.guessIndex >= state.wordCount) return;
+      if (state.challengeChecking || state.guessIndex >= state.wordCount) return;
 
       const previous = state.words[state.guessIndex - 1];
       const target = state.words[state.guessIndex];
+      state.challengeChecking = true;
       setMessage("guessMessage", `"${previous} → ?" tamamlaması kontrol ediliyor...`, "warn");
       playTone("warning");
 
-      const result = await validatePair(previous, target);
+      try {
+        const result = await validatePair(previous, target);
 
-      if (result.status === "invalid") {
-        state.scores[state.setter] -= 1;
-        state.scores[state.guesser] += 1;
-        updateScores();
-        setMessage(
-          "guessMessage",
-          `İtiraz haklı bulundu. Gizli kelime <strong>${target}</strong> idi; <strong>${previous} → ${target}</strong> tamamlaması uygun görünmüyor. ${playerName(state.setter)} -1, ${playerName(state.guesser)} +1 puan.`,
-          "good"
-        );
-        showTransition(
-          "İtiraz Kabul Edildi",
-          `${playerName(state.guesser)} haklı bulundu. Puan değişikliği yapıldı.`,
-          "Sıradaki Oyuncuya Geç",
-          nextTurn
-        );
-      } else if (result.status === "valid") {
-        setMessage(
-          "guessMessage",
-          `İtiraz reddedildi. Kelime tamamlamada sorun yoktur.`,
-          "warn"
-        );
-      } else {
-        setMessage(
-          "guessMessage",
-          `Sistem kesin karar veremedi. Öğretmen kararıyla oyuna devam edilebilir.`,
-          "warn"
-        );
+        if (result.status === "invalid") {
+          state.scores[state.setter] -= 1;
+          state.scores[state.guesser] += 1;
+          updateScores();
+          setMessage(
+            "guessMessage",
+            `İtiraz haklı bulundu. Gizli kelime <strong>${target}</strong> idi; <strong>${previous} → ${target}</strong> tamamlaması uygun görünmüyor. ${playerName(state.setter)} -1, ${playerName(state.guesser)} +1 puan.`,
+            "good"
+          );
+          showTransition(
+            "İtiraz Kabul Edildi",
+            `${playerName(state.guesser)} haklı bulundu. Puan değişikliği yapıldı.`,
+            "Sıradaki Oyuncuya Geç",
+            nextTurn
+          );
+        } else if (result.status === "valid") {
+          setMessage(
+            "guessMessage",
+            `İtiraz reddedildi. Kelime tamamlamada sorun yoktur.`,
+            "warn"
+          );
+        } else {
+          setMessage(
+            "guessMessage",
+            `Sistem kesin karar veremedi. Öğretmen kararıyla oyuna devam edilebilir.`,
+            "warn"
+          );
+        }
+      } finally {
+        state.challengeChecking = false;
       }
     }
 
@@ -1152,6 +1222,7 @@
         <div>⭐ Hiç yanlış yapmadan bulursa: +2 puan</div>
         <div>❌ Bir kelimede 5 hakkı biterse: 0 puan</div>
         <div>⚖️ Hatalı kelime itirazı haklıysa: kelimeyi yazan -1, itiraz eden +1</div>
+        <div>🔎 Kelime kontrolü: önce yerel örnek listeye, sonra Türkçe Vikipedi’de tam ifade kanıtına bakılır.</div>
       `;
       $("modalButtons").innerHTML = `<button onclick="closeModal()">Tamam</button>`;
       $("modalBackdrop").classList.add("active");
@@ -1228,12 +1299,31 @@
       try {
         const online = await searchTurkishWikipedia(candidates);
         if (online.found) {
-          return {status: "valid", detail: `çevrim içi aramada "${online.candidate}" için kanıt bulundu`};
+          return {status: "valid", detail: `Türkçe Vikipedi aramasında "${online.candidate}" ifadesi tam eşleşme olarak bulundu`};
         }
-        return {status: "invalid", detail: `yerel listede ve çevrim içi aramada "${candidates.join(" / ")}" için yeterli kanıt bulunamadı`};
+        return {status: "invalid", detail: `yerel listede ve Türkçe Vikipedi tam ifade aramasında "${candidates.join(" / ")}" için yeterli kanıt bulunamadı`};
       } catch (e) {
         return {status: "uncertain", detail: "çevrim içi kontrol yapılamadı; bağlantı veya tarayıcı izni sorunu olabilir"};
       }
+    }
+
+    function stripHtml(text) {
+      const temp = document.createElement("div");
+      temp.innerHTML = text || "";
+      return temp.textContent || temp.innerText || "";
+    }
+
+    function normalizeForEvidence(text) {
+      return normalizeText(stripHtml(text))
+        .replace(/[^A-ZÇĞİÖŞÜ0-9 ]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function containsExactPhrase(text, phrase) {
+      const haystack = ` ${normalizeForEvidence(text)} `;
+      const needle = ` ${normalizeForEvidence(phrase)} `;
+      return haystack.includes(needle);
     }
 
     async function searchTurkishWikipedia(candidates) {
@@ -1242,28 +1332,30 @@
         const timer = setTimeout(() => controller.abort(), 4500);
 
         const url =
-          "https://tr.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=5&srsearch=" +
+          "https://tr.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=8&srsearch=" +
           encodeURIComponent('"' + cand.toLocaleLowerCase("tr-TR") + '"');
 
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timer);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timer);
 
-        if (!response.ok) continue;
-        const data = await response.json();
-        const results = data?.query?.search || [];
-        const normalizedCandidate = normalizeText(cand);
+          if (!response.ok) continue;
+          const data = await response.json();
+          const results = data?.query?.search || [];
 
-        const exactEvidence = results.some(item => {
-          const title = normalizeText(item.title || "");
-          const snippet = normalizeText((item.snippet || "").replace(/<[^>]+>/g, " "));
-          return title.includes(normalizedCandidate) || snippet.includes(normalizedCandidate);
-        });
+          const exactEvidence = results.some(item => {
+            return containsExactPhrase(item.title || "", cand) || containsExactPhrase(item.snippet || "", cand);
+          });
 
-        if (exactEvidence || results.length > 0) {
-          return {found: true, candidate: cand};
+          if (exactEvidence) {
+            return {found: true, candidate: cand, checked: true};
+          }
+        } catch (e) {
+          clearTimeout(timer);
+          throw e;
         }
       }
-      return {found: false};
+      return {found: false, checked: true};
     }
 
     $("entryWord").addEventListener("input", (e) => {
