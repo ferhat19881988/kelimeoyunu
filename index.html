@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mira ve Nehir Kelime Zinciri Oyunu</title>
+  <style>
+    :root {
+      --bg1: #eef7ff;
+      --bg2: #fff6ef;
+      --card: rgba(255,255,255,.86);
+      --line: rgba(34, 61, 92, .15);
+      --text: #1f2a37;
+      --muted: #64748b;
+      --primary: #4f46e5;
+      --primary-dark: #3730a3;
+      --good: #16a34a;
+      --bad: #dc2626;
+      --warn: #d97706;
+      --soft: #f8fafc;
+      --shadow: 0 20px 50px rgba(31, 42, 55, .14);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(79,70,229,.20), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(251,146,60,.22), transparent 34%),
+        linear-gradient(135deg, var(--bg1), var(--bg2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .app {
+      width: min(1040px, 100%);
+    }
+
+    .screen { display: none; }
+    .screen.active {
+      display: block;
+      animation: fade .24s ease;
+    }
+
+    @keyframes fade {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: clamp(20px, 4vw, 38px);
+    }
+
+    .hero {
+      text-align: center;
+      padding: clamp(28px, 5vw, 52px);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    h1, h2, h3 { margin: 0; }
+    h1 {
+      font-size: clamp(30px, 6vw, 58px);
+      line-height: 1.03;
+      letter-spacing: -1.5px;
+    }
+
+    h2 {
+      font-size: clamp(25px, 4vw, 39px);
+      letter-spacing: -0.8px;
+    }
+
+    h3 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .lead {
+      max-width: 730px;
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 720px) {
+      .grid, .grid.three {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #334155;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 15px 16px;
+      font-size: 18px;
+      outline: none;
+      background: rgba(255,255,255,.92);
+      color: var(--text);
+      transition: .16s;
+    }
+
+    input:focus, select:focus {
+      border-color: rgba(79,70,229,.55);
+      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
+    }
+
+    .word-input {
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 900;
+      font-size: clamp(26px, 4vw, 42px);
+      text-align: center;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-weight: 900;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform .12s ease, filter .12s ease, background .12s ease;
+      color: #fff;
+      background: var(--primary);
+      box-shadow: 0 10px 24px rgba(79,70,229,.20);
+    }
+
+    button:hover { transform: translateY(-1px); filter: brightness(1.02); }
+    button:active { transform: translateY(0); }
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+      transform: none;
+      filter: none;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      box-shadow: 0 10px 24px rgba(51,65,85,.14);
+    }
+
+    .btn-light {
+      background: #e2e8f0;
+      color: #1e293b;
+      box-shadow: none;
+    }
+
+    .btn-good { background: var(--good); }
+    .btn-bad { background: var(--bad); }
+    .btn-warn { background: var(--warn); }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    .scoreboard {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0 22px;
+    }
+
+    .score {
+      background: rgba(248,250,252,.82);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .score .name {
+      font-weight: 900;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+
+    .score .num {
+      font-size: 34px;
+      font-weight: 1000;
+      color: var(--primary-dark);
+    }
+
+    .panel {
+      background: rgba(248,250,252,.82);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      margin-top: 18px;
+    }
+
+    .muted { color: var(--muted); }
+    .center { text-align: center; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .pill.good { background: #dcfce7; color: #166534; }
+    .pill.bad { background: #fee2e2; color: #991b1b; }
+    .pill.warn { background: #fef3c7; color: #92400e; }
+
+    .chain {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    @media (max-width: 780px) {
+      .chain { grid-template-columns: 1fr; }
+    }
+
+    .chain-item {
+      min-height: 88px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 12px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chain-item::before {
+      content: attr(data-num);
+      position: absolute;
+      top: 9px;
+      left: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .chain-word {
+      font-size: clamp(18px, 3vw, 26px);
+      font-weight: 1000;
+      letter-spacing: .7px;
+      word-break: break-word;
+    }
+
+    .chain-note {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .current {
+      outline: 3px solid rgba(79,70,229,.22);
+      background: #eef2ff;
+    }
+
+    .found {
+      background: #ecfdf5;
+      color: #14532d;
+    }
+
+    .locked {
+      background: #f8fafc;
+      color: #94a3b8;
+    }
+
+    .message {
+      min-height: 48px;
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.8);
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .message.good { background: #dcfce7; color: #14532d; border-color: #86efac; }
+    .message.bad { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
+    .message.warn { background: #fef3c7; color: #78350f; border-color: #fde68a; }
+
+    .mini-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+    }
+
+    .mini-list div {
+      background: rgba(255,255,255,.7);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight: 800;
+    }
+
+    .attempts {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 12px 0 2px;
+    }
+
+    .heart {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #fee2e2;
+      color: var(--bad);
+      font-weight: 1000;
+    }
+
+    .heart.off {
+      background: #e5e7eb;
+      color: #9ca3af;
+    }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,.46);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 50;
+    }
+
+    .modal-backdrop.active { display: flex; }
+
+    .modal {
+      width: min(560px, 100%);
+      background: #fff;
+      border-radius: 24px;
+      box-shadow: 0 30px 80px rgba(15,23,42,.28);
+      padding: 26px;
+      text-align: center;
+    }
+
+    .small {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .toggle {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 14px;
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .toggle input {
+      width: auto;
+      transform: scale(1.15);
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .confetti {
+      font-size: 40px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section id="menuScreen" class="screen active">
+      <div class="card hero">
+        <div class="badge">🎯 Mira & Nehir'in Kelime Oyunu</div>
+        <h1>Kelime Tamamlama Oyunu</h1>
+        <p class="lead">
+          İki kişilik zincir kelime oyunu. Bir oyuncu 5 kelime yazar, diğer oyuncu ilk kelimeyi ipucu alarak
+          sıradaki kelimeleri bulmaya çalışır.
+        </p>
+
+        <div class="grid">
+          <div>
+            <label for="p1Name">1. Oyuncu</label>
+            <input id="p1Name" value="" maxlength="18" />
+          </div>
+          <div>
+            <label for="p2Name">2. Oyuncu</label>
+            <input id="p2Name" value="" maxlength="18" />
+          </div>
+        </div>
+
+        <div class="grid three">
+          <div>
+            <label for="seriesCount">Kaç seri oynansın?</label>
+            <input id="seriesCount" type="number" min="2" max="10" value="2" />
+          </div>
+          <div>
+            <label for="wordCount">Kaç kelime yazılsın?</label>
+            <input id="wordCount" type="number" min="3" max="10" value="5" />
+          </div>
+          <div>
+            <label for="startSetter">İlk kelimeleri kim yazsın?</label>
+            <select id="startSetter">
+              <option value="1">1. Oyuncu</option>
+              <option value="2">2. Oyuncu</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button onclick="startGame()">Oyuna Başla</button>
+          <button class="btn-secondary" onclick="showRules()">Kuralları Göster</button>
+          <button class="btn-light" onclick="exitGame()">Oyundan Çık</button>
+        </div>
+
+      </div>
+    </section>
+
+    <section id="entryScreen" class="screen">
+      <div class="card">
+        <div class="topbar">
+          <div>
+            <span id="entrySeries" class="pill"></span>
+            <h2 id="entryTitle" style="margin-top:10px"></h2>
+            <p id="entrySubtitle" class="muted"></p>
+          </div>
+          <div class="btn-row" style="margin-top:0">
+            <button class="btn-light" onclick="backToMenu()">Ana Menü</button>
+            <button class="btn-secondary" onclick="exitGame()">Çık</button>
+          </div>
+        </div>
+
+        <div class="scoreboard">
+          <div class="score">
+            <div id="scoreName1" class="name">Mira</div>
+            <div id="score1" class="num">0</div>
+          </div>
+          <div class="score">
+            <div id="scoreName2" class="name">Nehir</div>
+            <div id="score2" class="num">0</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Kelime Yazma Alanı</h3>
+          <p class="muted">
+            Kelimeler büyük harfe çevrilir. 2. kelimeden itibaren her kelime, üstündeki kelimenin tamamlayıcısı olmalıdır.
+          </p>
+
+          <div class="chain" id="entryChain"></div>
+
+          <label id="entryLabel" for="entryWord">1. kelimeyi yaz</label>
+          <input id="entryWord" class="word-input" autocomplete="off" maxlength="18" placeholder="KELİME" />
+
+          <div class="btn-row">
+            <button id="confirmWordBtn" onclick="confirmEntryWord()">Kelimeyi Onayla</button>
+            <button id="editLastWordBtn" class="btn-warn" onclick="editLastWord()" disabled>Son Kelimeyi Düzelt</button>
+            <button id="passToGuesserBtn" class="btn-good" onclick="goToGuess()" disabled>İkinci Kişiye Geç</button>
+            <button class="btn-light" onclick="clearCurrentWords()">Kelimeleri Temizle</button>
+          </div>
+
+          <div id="entryMessage" class="message">İlk kelimeyi yazıp onayla.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="guessScreen" class="screen">
+      <div class="card">
+        <div class="topbar">
+          <div>
+            <span id="guessSeries" class="pill"></span>
+            <h2 id="guessTitle" style="margin-top:10px"></h2>
+            <p id="guessSubtitle" class="muted"></p>
+          </div>
+          <div class="btn-row" style="margin-top:0">
+            <button class="btn-light" onclick="backToMenu()">Ana Menü</button>
+            <button class="btn-secondary" onclick="exitGame()">Çık</button>
+          </div>
+        </div>
+
+        <div class="scoreboard">
+          <div class="score">
+            <div id="gScoreName1" class="name">Mira</div>
+            <div id="gScore1" class="num">0</div>
+          </div>
+          <div class="score">
+            <div id="gScoreName2" class="name">Nehir</div>
+            <div id="gScore2" class="num">0</div>
+          </div>
+        </div>
+
+        <div class="panel center">
+          <h3>Kelimeyi Bul</h3>
+          <p class="muted" id="guessHelp">
+            İlk kelime açık. Sıradaki kelimenin baş harfi görünüyor. Diğer harfleri sen tamamla.
+          </p>
+
+          <div class="chain" id="guessChain"></div>
+
+          <div>
+            <span class="pill warn" id="attemptText">5 hak kaldı</span>
+            <div class="attempts" id="attemptIcons"></div>
+          </div>
+
+          <label id="guessLabel" for="guessWord" style="margin-top:16px">Tahminini yaz</label>
+          <input id="guessWord" class="word-input" autocomplete="off" maxlength="18" placeholder="TAHMİN" />
+
+          <div class="btn-row">
+            <button onclick="submitGuess()">Tamam</button>
+            <button class="btn-warn" onclick="challengeCurrentWord()">Hatalı Olduğunu Düşünüyorum</button>
+          </div>
+
+          <div id="guessMessage" class="message">Tahminini yazıp Tamam'a bas.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="endScreen" class="screen">
+      <div class="card hero">
+        <div class="confetti">🏆</div>
+        <h1>Oyun Bitti</h1>
+        <p id="winnerText" class="lead"></p>
+
+        <div class="scoreboard">
+          <div class="score">
+            <div id="endName1" class="name">Mira</div>
+            <div id="endScore1" class="num">0</div>
+          </div>
+          <div class="score">
+            <div id="endName2" class="name">Nehir</div>
+            <div id="endScore2" class="num">0</div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button onclick="restartSame()">Aynı Ayarlarla Tekrar Oyna</button>
+          <button class="btn-light" onclick="backToMenu()">Ana Menüye Dön</button>
+          <button class="btn-secondary" onclick="exitGame()">Oyundan Çık</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modalBackdrop" class="modal-backdrop">
+    <div class="modal">
+      <h2 id="modalTitle">Bilgi</h2>
+      <p id="modalText" class="lead" style="font-size:17px"></p>
+      <div id="modalExtra" class="mini-list"></div>
+      <div class="btn-row" id="modalButtons"></div>
+    </div>
+  </div>
+
+  <script>
+    const LOCAL_VALID_PAIRS = new Set([
+      "TAHTA KALEMİ", "TAHTA KALEM",
+      "KALEM UCU", "KALEM UÇU",
+      "UÇ KUTUSU", "UÇ KUTU",
+      "OKUL ÇANTASI", "ÇANTA FERMUARI", "FERMUAR DİŞİ",
+      "DİŞ FIRÇASI", "FIRÇA SAPI",
+      "SU ŞİŞESİ", "ŞİŞE KAPAĞI",
+      "KAPI KOLU", "KOL SAATİ",
+      "SAAT KAYIŞI", "KAYIŞ TOKASI",
+      "MASA AYAĞI", "AYAKKABI BAĞI",
+      "BAHÇE KAPISI", "KAPI ZİLİ",
+      "TELEFON EKRANI", "EKRAN KORUYUCU",
+      "KİTAP KAPAĞI", "KAPAK RESMİ",
+      "SINIF DEFTERİ", "DEFTER KENARI",
+      "RENK KALEMİ", "BOYA KALEMİ",
+      "PENCERE CAMI", "CAM SİLESİ",
+      "OYUN KARTI", "KART KUTUSU",
+      "ÇAY BARDAĞI", "BARDAK ALTLIĞI",
+      "EV ANAHTARI", "ANAHTAR DELİĞİ",
+      "GÖZLÜK CAMI", "CAM KENARI",
+      "RESİM DEFTERİ", "DEFTER KAPAĞI",
+      "BİLGİSAYAR FARESİ", "FARE ALTLIĞI"
+    ]);
+
+    const state = {
+      p1: "Mira",
+      p2: "Nehir",
+      totalSeries: 5,
+      wordCount: 5,
+      currentSeries: 1,
+      startSetter: 1,
+      setter: 1,
+      guesser: 2,
+      scores: {1: 0, 2: 0},
+      words: [],
+      guessIndex: 1,
+      attemptsLeft: 5,
+      hadMistake: false,
+      onlineCheck: true,
+      lastSettings: null
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      $(id).classList.add("active");
+    }
+
+    function playerName(num) {
+      return num === 1 ? state.p1 : state.p2;
+    }
+
+    function normalizeText(text) {
+      return (text || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLocaleUpperCase("tr-TR")
+        .replace(/Â/g, "A")
+        .replace(/Î/g, "İ")
+        .replace(/Û/g, "U");
+    }
+
+    function cleanSingleWord(text) {
+      return normalizeText(text).replace(/[^A-ZÇĞİÖŞÜ]/g, "");
+    }
+
+    function isWordValid(word) {
+      return /^[A-ZÇĞİÖŞÜ]{2,18}$/u.test(word);
+    }
+
+    function playTone(type) {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.value = type === "success" ? 740 : type === "warning" ? 420 : 180;
+        gain.gain.value = .05;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+
+        if (type === "success") {
+          osc.frequency.setValueAtTime(740, ctx.currentTime);
+          osc.frequency.setValueAtTime(920, ctx.currentTime + .08);
+        }
+
+        gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .28);
+        osc.stop(ctx.currentTime + .3);
+      } catch (e) {}
+    }
+
+    function setMessage(id, text, type = "") {
+      const el = $(id);
+      el.className = "message" + (type ? " " + type : "");
+      el.innerHTML = text;
+    }
+
+    function updateScores() {
+      ["scoreName1","gScoreName1","endName1"].forEach(id => $(id).textContent = state.p1);
+      ["scoreName2","gScoreName2","endName2"].forEach(id => $(id).textContent = state.p2);
+      ["score1","gScore1","endScore1"].forEach(id => $(id).textContent = state.scores[1]);
+      ["score2","gScore2","endScore2"].forEach(id => $(id).textContent = state.scores[2]);
+    }
+
+    function startGame() {
+      const name1 = $("p1Name").value.trim();
+      const name2 = $("p2Name").value.trim();
+
+      if (!name1 || !name2) {
+        playTone("error");
+        $("modalTitle").textContent = "Uyarı";
+        $("modalText").textContent = "Oyuna başlamadan önce iki oyuncunun da adını yazmalısın.";
+        $("modalExtra").innerHTML = "";
+        $("modalButtons").innerHTML = `<button onclick="closeModal(); document.getElementById('${!name1 ? "p1Name" : "p2Name"}').focus();">Tamam</button>`;
+        $("modalBackdrop").classList.add("active");
+        return;
+      }
+
+      state.p1 = name1;
+      state.p2 = name2;
+      state.totalSeries = Math.max(2, Math.min(10, Number($("seriesCount").value) || 2));
+      state.wordCount = Math.max(3, Math.min(10, Number($("wordCount").value) || 5));
+      state.startSetter = Number($("startSetter").value);
+      state.setter = state.startSetter;
+      state.guesser = state.setter === 1 ? 2 : 1;
+      state.currentSeries = 1;
+      state.scores = {1: 0, 2: 0};
+      state.onlineCheck = true;
+      state.lastSettings = {
+        p1: state.p1,
+        p2: state.p2,
+        totalSeries: state.totalSeries,
+        wordCount: state.wordCount,
+        startSetter: state.startSetter,
+        onlineCheck: state.onlineCheck
+      };
+      resetTurn();
+      updateScores();
+      showEntry();
+    }
+
+    function restartSame() {
+      if (!state.lastSettings) return backToMenu();
+      state.p1 = state.lastSettings.p1;
+      state.p2 = state.lastSettings.p2;
+      state.totalSeries = state.lastSettings.totalSeries;
+      state.wordCount = state.lastSettings.wordCount;
+      state.startSetter = state.lastSettings.startSetter;
+      state.onlineCheck = state.lastSettings.onlineCheck;
+      state.setter = state.startSetter;
+      state.guesser = state.setter === 1 ? 2 : 1;
+      state.currentSeries = 1;
+      state.scores = {1: 0, 2: 0};
+      resetTurn();
+      updateScores();
+      showEntry();
+    }
+
+    function resetTurn() {
+      state.words = [];
+      state.guessIndex = 1;
+      state.attemptsLeft = 5;
+      state.hadMistake = false;
+    }
+
+    function showEntry() {
+      updateScores();
+      $("entrySeries").textContent = `Seri ${state.currentSeries}/${state.totalSeries}`;
+      $("entryTitle").textContent = `${playerName(state.setter)} kelimeleri yazıyor`;
+      $("entrySubtitle").textContent = `${playerName(state.guesser)} bu kelimeleri tahmin edecek. Kelimeleri diğer oyuncuya göstermeden gir.`;
+      $("entryWord").value = "";
+      $("passToGuesserBtn").disabled = state.words.length !== state.wordCount;
+      updateEntryChain();
+      updateEntryLabel();
+      setMessage("entryMessage", state.words.length === 0 ? "İlk kelimeyi yazıp onayla." : "Sıradaki kelimeyi yazıp onayla.");
+      showScreen("entryScreen");
+      setTimeout(() => $("entryWord").focus(), 100);
+    }
+
+    function updateEntryLabel() {
+      const next = state.words.length + 1;
+      $("entryLabel").textContent = next <= state.wordCount ? `${next}. kelimeyi yaz` : `${state.wordCount} kelime hazır`;
+      $("confirmWordBtn").disabled = state.words.length >= state.wordCount;
+      $("editLastWordBtn").disabled = state.words.length === 0;
+    }
+
+    function updateEntryChain() {
+      const chain = $("entryChain");
+      chain.innerHTML = "";
+      for (let i = 0; i < state.wordCount; i++) {
+        const item = document.createElement("div");
+        item.className = "chain-item " + (state.words[i] ? "found" : "locked");
+        item.dataset.num = `${i + 1}.`;
+        const word = state.words[i] || "—";
+        item.innerHTML = `<div class="chain-word">${word}</div><div class="chain-note">${state.words[i] ? "Onaylandı" : "Boş"}</div>`;
+        chain.appendChild(item);
+      }
+    }
+
+    async function confirmEntryWord() {
+      const input = $("entryWord");
+      const word = cleanSingleWord(input.value);
+      input.value = word;
+
+      if (!isWordValid(word)) {
+        playTone("error");
+        setMessage("entryMessage", "Kelime 2-18 harf arasında olmalı ve yalnızca Türkçe harflerden oluşmalı.", "bad");
+        return;
+      }
+
+      if (state.words.includes(word)) {
+        playTone("error");
+        setMessage("entryMessage", "Aynı kelimeyi tekrar kullanma. Yeni bir kelime yaz.", "bad");
+        return;
+      }
+
+      $("confirmWordBtn").disabled = true;
+      setMessage("entryMessage", "Kelime kontrol ediliyor...", "warn");
+
+      if (state.words.length > 0) {
+        const previous = state.words[state.words.length - 1];
+        const result = await validatePair(previous, word);
+
+        if (result.status === "invalid") {
+          playTone("error");
+          $("confirmWordBtn").disabled = false;
+          setMessage(
+            "entryMessage",
+            `Bu kelime bir önceki kelimeyi uygun şekilde tamamlamıyor. Başka bir kelime dene.`,
+            "bad"
+          );
+          return;
+        }
+
+        if (result.status === "uncertain") {
+          playTone("warning");
+          setMessage(
+            "entryMessage",
+            `Kelime kaydedildi. Gerekirse oyun sırasında itiraz hakkı kullanılabilir.`,
+            "warn"
+          );
+        } else {
+          playTone("success");
+          setMessage(
+            "entryMessage",
+            `Kelime onaylandı. Sıradaki kelimeyi yaz.`,
+            "good"
+          );
+        }
+      } else {
+        playTone("success");
+        setMessage("entryMessage", "İlk kelime onaylandı. Şimdi bu kelimeyi tamamlayacak 2. kelimeyi yaz.", "good");
+      }
+
+      state.words.push(word);
+      input.value = "";
+      updateEntryChain();
+      updateEntryLabel();
+      $("confirmWordBtn").disabled = state.words.length >= 5;
+      $("passToGuesserBtn").disabled = state.words.length !== state.wordCount;
+
+      if (state.words.length === 5) {
+        setMessage("entryMessage", "5 kelime hazır. Şimdi “İkinci Kişiye Geç” butonuna bas.", "good");
+      } else {
+        setTimeout(() => input.focus(), 80);
+      }
+    }
+
+    function editLastWord() {
+      if (state.words.length === 0) return;
+      const lastWord = state.words.pop();
+      $("entryWord").value = lastWord;
+      $("confirmWordBtn").disabled = false;
+      $("passToGuesserBtn").disabled = true;
+      updateEntryChain();
+      updateEntryLabel();
+      setMessage("entryMessage", "Son kelime düzenleme için açıldı. Düzeltip yeniden onayla.", "warn");
+      $("entryWord").focus();
+      $("entryWord").select();
+    }
+
+    function clearCurrentWords() {
+      resetTurn();
+      updateEntryChain();
+      updateEntryLabel();
+      $("entryWord").value = "";
+      $("passToGuesserBtn").disabled = true;
+      $("confirmWordBtn").disabled = false;
+      $("editLastWordBtn").disabled = true;
+      setMessage("entryMessage", "Kelimeler temizlendi. İlk kelimeyi yeniden yaz.", "warn");
+      $("entryWord").focus();
+    }
+
+    function goToGuess() {
+      if (state.words.length !== state.wordCount) {
+        setMessage("entryMessage", `Tahmin aşamasına geçmek için ${state.wordCount} kelime onaylanmalı.`, "bad");
+        return;
+      }
+      state.guessIndex = 1;
+      state.attemptsLeft = 5;
+      state.hadMistake = false;
+      showGuess();
+    }
+
+    function showGuess() {
+      updateScores();
+      $("guessSeries").textContent = `Seri ${state.currentSeries}/${state.totalSeries}`;
+      $("guessTitle").textContent = `Sıra ${playerName(state.guesser)} oyuncusunda`;
+      $("guessSubtitle").textContent = `${playerName(state.setter)} kelimeleri yazdı. İlk kelime açık, diğerleri sırayla bulunacak.`;
+      $("guessWord").value = "";
+      updateGuessChain();
+      updateAttempts();
+      setMessage("guessMessage", "Tahminini büyük harfle yazmana gerek yok; oyun otomatik büyütür.");
+      showScreen("guessScreen");
+      setTimeout(() => $("guessWord").focus(), 100);
+    }
+
+    function maskWord(word) {
+      if (!word) return "—";
+      if (word.length <= 1) return word;
+      return word[0] + " " + "□ ".repeat(word.length - 1).trim();
+    }
+
+    function updateGuessChain() {
+      const chain = $("guessChain");
+      chain.innerHTML = "";
+
+      for (let i = 0; i < state.wordCount; i++) {
+        const item = document.createElement("div");
+        item.dataset.num = `${i + 1}.`;
+        let shown = "🔒";
+        let note = "Kilitli";
+        let cls = "locked";
+
+        if (i === 0 || i < state.guessIndex) {
+          shown = state.words[i];
+          note = i === 0 ? "İlk ipucu" : "Bulundu";
+          cls = "found";
+        } else if (i === state.guessIndex) {
+          shown = maskWord(state.words[i]);
+          note = "Şu anki kelime";
+          cls = "current";
+        }
+
+        item.className = "chain-item " + cls;
+        item.innerHTML = `<div class="chain-word">${shown}</div><div class="chain-note">${note}</div>`;
+        chain.appendChild(item);
+      }
+
+      if (state.guessIndex < state.wordCount) {
+        const previous = state.words[state.guessIndex - 1];
+        $("guessLabel").textContent = `${previous} kelimesini tamamlayan ${state.guessIndex + 1}. kelimeyi yaz`;
+      }
+    }
+
+    function updateAttempts() {
+      $("attemptText").textContent = `${state.attemptsLeft} hak kaldı`;
+      const wrap = $("attemptIcons");
+      wrap.innerHTML = "";
+      for (let i = 1; i <= 5; i++) {
+        const h = document.createElement("div");
+        h.className = "heart" + (i <= state.attemptsLeft ? "" : " off");
+        h.textContent = "♥";
+        wrap.appendChild(h);
+      }
+    }
+
+    function submitGuess() {
+      if (state.guessIndex >= state.wordCount) return;
+
+      const input = $("guessWord");
+      const guess = cleanSingleWord(input.value);
+      input.value = guess;
+
+      if (!isWordValid(guess)) {
+        playTone("error");
+        setMessage("guessMessage", "Tahmin en az 2 harfli bir kelime olmalı.", "bad");
+        return;
+      }
+
+      const target = state.words[state.guessIndex];
+
+      if (guess === target) {
+        playTone("success");
+        state.guessIndex += 1;
+        state.attemptsLeft = 5;
+        $("guessWord").value = "";
+
+        if (state.guessIndex >= state.wordCount) {
+          const point = state.hadMistake ? 1 : 2;
+          state.scores[state.guesser] += point;
+          updateScores();
+          updateGuessChain();
+          setMessage(
+            "guessMessage",
+            state.hadMistake
+              ? `Tebrikler! Tüm kelimeler bulundu. ${playerName(state.guesser)} +1 puan kazandı.`
+              : `Harika! Hiç yanlış yapmadan tüm kelimeler bulundu. ${playerName(state.guesser)} +2 puan kazandı.`,
+            "good"
+          );
+          showTransition("Tur Tamamlandı", `${playerName(state.guesser)} bu turdan ${point} puan aldı.`, "Sıradaki Oyuncuya Geç", nextTurn);
+          return;
+        }
+
+        updateGuessChain();
+        updateAttempts();
+        setMessage("guessMessage", "Doğru! Yeni kelimeye geçildi ve hakların yeniden 5 oldu.", "good");
+        setTimeout(() => $("guessWord").focus(), 80);
+      } else {
+        playTone("error");
+        state.hadMistake = true;
+        state.attemptsLeft -= 1;
+        updateAttempts();
+
+        if (state.attemptsLeft <= 0) {
+          setMessage(
+            "guessMessage",
+            `Hak bitti. Doğru kelime: <strong>${target}</strong>. Bu turdan puan alınamadı.`,
+            "bad"
+          );
+          showTransition("Haklar Bitti", `${playerName(state.guesser)} bu tur puan alamadı.`, "Sıradaki Oyuncuya Geç", nextTurn);
+          return;
+        }
+
+        setMessage("guessMessage", `Yanlış cevap. ${state.attemptsLeft} hakkın kaldı.`, "bad");
+        input.select();
+      }
+    }
+
+    async function challengeCurrentWord() {
+      if (state.guessIndex >= state.wordCount) return;
+
+      const previous = state.words[state.guessIndex - 1];
+      const target = state.words[state.guessIndex];
+      setMessage("guessMessage", `"${previous} → ?" tamamlaması kontrol ediliyor...`, "warn");
+      playTone("warning");
+
+      const result = await validatePair(previous, target);
+
+      if (result.status === "invalid") {
+        state.scores[state.setter] -= 1;
+        state.scores[state.guesser] += 1;
+        updateScores();
+        setMessage(
+          "guessMessage",
+          `İtiraz haklı bulundu. Gizli kelime <strong>${target}</strong> idi; <strong>${previous} → ${target}</strong> tamamlaması uygun görünmüyor. ${playerName(state.setter)} -1, ${playerName(state.guesser)} +1 puan.`,
+          "good"
+        );
+        showTransition(
+          "İtiraz Kabul Edildi",
+          `${playerName(state.guesser)} haklı bulundu. Puan değişikliği yapıldı.`,
+          "Sıradaki Oyuncuya Geç",
+          nextTurn
+        );
+      } else if (result.status === "valid") {
+        setMessage(
+          "guessMessage",
+          `İtiraz reddedildi. Kelime tamamlamada sorun yoktur.`,
+          "warn"
+        );
+      } else {
+        setMessage(
+          "guessMessage",
+          `Sistem kesin karar veremedi. Öğretmen kararıyla oyuna devam edilebilir.`,
+          "warn"
+        );
+      }
+    }
+
+    function nextTurn() {
+      closeModal();
+
+      if (state.setter === state.startSetter) {
+        state.setter = state.startSetter === 1 ? 2 : 1;
+        state.guesser = state.startSetter;
+      } else {
+        state.currentSeries += 1;
+        state.setter = state.startSetter;
+        state.guesser = state.startSetter === 1 ? 2 : 1;
+      }
+
+      if (state.currentSeries > state.totalSeries) {
+        finishGame();
+        return;
+      }
+
+      resetTurn();
+      showEntry();
+    }
+
+    function finishGame() {
+      updateScores();
+      const s1 = state.scores[1];
+      const s2 = state.scores[2];
+      let text = "";
+      if (s1 > s2) text = `${state.p1} oyunu kazandı!`;
+      else if (s2 > s1) text = `${state.p2} oyunu kazandı!`;
+      else text = "Oyun berabere bitti!";
+      $("winnerText").textContent = `${text} Son puan: ${state.p1} ${s1} - ${state.p2} ${s2}`;
+      showScreen("endScreen");
+    }
+
+    function showTransition(title, text, buttonText, action) {
+      $("modalTitle").textContent = title;
+      $("modalText").textContent = text;
+      $("modalExtra").innerHTML = makeWordList();
+      $("modalButtons").innerHTML = "";
+      const btn = document.createElement("button");
+      btn.textContent = buttonText;
+      btn.onclick = action;
+      $("modalButtons").appendChild(btn);
+      $("modalBackdrop").classList.add("active");
+    }
+
+    function makeWordList() {
+      return state.words.map((w, i) => `<div>${i + 1}. ${w}</div>`).join("");
+    }
+
+    function showRules() {
+      $("modalTitle").textContent = "Oyun Kuralları";
+      $("modalText").textContent = "Bir oyuncu seçilen sayıda kelime yazar. İlk kelime açık görünür. Diğer oyuncu 2. kelimeden başlayarak her kelimeyi bulmaya çalışır. Her kelime için 5 hak vardır ve doğru bilinince haklar yeniden 5 olur.";
+      $("modalExtra").innerHTML = `
+        <div>✅ Tüm kelimeleri bulursa: +1 puan</div>
+        <div>⭐ Hiç yanlış yapmadan bulursa: +2 puan</div>
+        <div>❌ Bir kelimede 5 hakkı biterse: 0 puan</div>
+        <div>⚖️ Hatalı kelime itirazı haklıysa: kelimeyi yazan -1, itiraz eden +1</div>
+      `;
+      $("modalButtons").innerHTML = `<button onclick="closeModal()">Tamam</button>`;
+      $("modalBackdrop").classList.add("active");
+    }
+
+    function closeModal() {
+      $("modalBackdrop").classList.remove("active");
+    }
+
+    function backToMenu() {
+      closeModal();
+      showScreen("menuScreen");
+    }
+
+    function exitGame() {
+      window.location.href = "https://www.google.com.tr";
+    }
+
+    function lastVowel(word) {
+      const vowels = "AEIİOÖUÜ";
+      for (let i = word.length - 1; i >= 0; i--) {
+        if (vowels.includes(word[i])) return word[i];
+      }
+      return "A";
+    }
+
+    function vowelSuffix(word) {
+      const v = lastVowel(word);
+      if (v === "A" || v === "I") return "I";
+      if (v === "E" || v === "İ") return "İ";
+      if (v === "O" || v === "U") return "U";
+      if (v === "Ö" || v === "Ü") return "Ü";
+      return "I";
+    }
+
+    function softenedBase(word) {
+      if (word.endsWith("P")) return word.slice(0, -1) + "B";
+      if (word.endsWith("Ç")) return word.slice(0, -1) + "C";
+      if (word.endsWith("T")) return word.slice(0, -1) + "D";
+      if (word.endsWith("K")) return word.slice(0, -1) + "Ğ";
+      return word;
+    }
+
+    function possessiveForm(word) {
+      const suffix = vowelSuffix(word);
+      const endsWithVowel = "AEIİOÖUÜ".includes(word[word.length - 1]);
+      if (endsWithVowel) return word + "S" + suffix;
+      return softenedBase(word) + suffix;
+    }
+
+    function phraseCandidates(previous, current) {
+      const a = normalizeText(previous);
+      const b = normalizeText(current);
+      const p = possessiveForm(b);
+      return Array.from(new Set([
+        `${a} ${b}`,
+        `${a} ${p}`
+      ]));
+    }
+
+    async function validatePair(previous, current) {
+      const candidates = phraseCandidates(previous, current);
+
+      for (const c of candidates) {
+        if (LOCAL_VALID_PAIRS.has(c)) {
+          return {status: "valid", detail: `yerel örnek listede "${c}" bulundu`};
+        }
+      }
+
+      if (!state.onlineCheck) {
+        return {status: "uncertain", detail: "internet kontrolü kapalı; yalnızca yerel liste kontrol edildi"};
+      }
+
+      try {
+        const online = await searchTurkishWikipedia(candidates);
+        if (online.found) {
+          return {status: "valid", detail: `çevrim içi aramada "${online.candidate}" için kanıt bulundu`};
+        }
+        return {status: "invalid", detail: `yerel listede ve çevrim içi aramada "${candidates.join(" / ")}" için yeterli kanıt bulunamadı`};
+      } catch (e) {
+        return {status: "uncertain", detail: "çevrim içi kontrol yapılamadı; bağlantı veya tarayıcı izni sorunu olabilir"};
+      }
+    }
+
+    async function searchTurkishWikipedia(candidates) {
+      for (const cand of candidates) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4500);
+
+        const url =
+          "https://tr.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=5&srsearch=" +
+          encodeURIComponent('"' + cand.toLocaleLowerCase("tr-TR") + '"');
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+
+        if (!response.ok) continue;
+        const data = await response.json();
+        const results = data?.query?.search || [];
+        const normalizedCandidate = normalizeText(cand);
+
+        const exactEvidence = results.some(item => {
+          const title = normalizeText(item.title || "");
+          const snippet = normalizeText((item.snippet || "").replace(/<[^>]+>/g, " "));
+          return title.includes(normalizedCandidate) || snippet.includes(normalizedCandidate);
+        });
+
+        if (exactEvidence || results.length > 0) {
+          return {found: true, candidate: cand};
+        }
+      }
+      return {found: false};
+    }
+
+    $("entryWord").addEventListener("input", (e) => {
+      e.target.value = cleanSingleWord(e.target.value);
+    });
+
+    $("guessWord").addEventListener("input", (e) => {
+      e.target.value = cleanSingleWord(e.target.value);
+    });
+
+    $("entryWord").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") confirmEntryWord();
+    });
+
+    $("guessWord").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitGuess();
+    });
+
+    $("modalBackdrop").addEventListener("click", (e) => {
+      if (e.target.id === "modalBackdrop") closeModal();
+    });
+  </script>
+</body>
+</html>
