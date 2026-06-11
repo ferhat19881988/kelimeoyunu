@@ -612,41 +612,214 @@
     }
 
 
-    .progress-box {
-      margin-top: 18px;
+    .modal.join-modal {
+      width: min(520px, calc(100vw - 24px));
+      padding: 0;
+      overflow: hidden;
       text-align: left;
+      background:
+        radial-gradient(circle at top left, rgba(79,70,229,.14), transparent 42%),
+        linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
+    .modal.join-modal #modalTitle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 26px 24px 0;
+      font-size: clamp(23px, 5vw, 31px);
+      line-height: 1.18;
+      letter-spacing: -.6px;
+      text-align: center;
+    }
+
+    .modal.join-modal #modalText {
+      max-width: none;
+      margin: 10px 28px 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px !important;
+      line-height: 1.45;
+    }
+
+    .modal.join-modal #modalButtons {
+      display: none;
+    }
+
+    .join-title-icon {
+      width: 38px;
+      height: 38px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 15px;
+      background: #eef2ff;
+      box-shadow: inset 0 0 0 1px rgba(79,70,229,.12);
+      font-size: 20px;
+      flex: 0 0 auto;
+    }
+
+    .progress-box {
+      margin: 22px 24px 24px;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,.82);
+      border: 1px solid rgba(34,61,92,.12);
+      box-shadow: 0 18px 44px rgba(15,23,42,.10);
+    }
+
+    .join-progress-head {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .join-progress-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #eef2ff, #ecfdf5);
+      border: 1px solid rgba(79,70,229,.15);
+      font-size: 21px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .join-progress-icon::after {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border-radius: 50%;
+      border: 2px solid rgba(79,70,229,.16);
+      border-top-color: var(--primary);
+      animation: spin .9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .join-progress-label {
+      font-weight: 1000;
+      color: #1e293b;
+      line-height: 1.2;
+    }
+
+    .progress-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .progress-percent {
+      min-width: 58px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: var(--primary-dark);
+      font-size: 15px;
+      font-weight: 1000;
+      box-shadow: inset 0 0 0 1px rgba(79,70,229,.12);
     }
 
     .progress-track {
       width: 100%;
-      height: 18px;
+      height: 14px;
       background: #e2e8f0;
       border-radius: 999px;
       overflow: hidden;
       border: 1px solid rgba(34, 61, 92, .12);
+      box-shadow: inset 0 1px 3px rgba(15,23,42,.10);
     }
 
     .progress-fill {
       width: 0%;
       height: 100%;
-      background: linear-gradient(90deg, var(--primary), var(--good));
+      background: linear-gradient(90deg, var(--primary), #7c3aed, var(--good));
       border-radius: 999px;
-      transition: width .22s ease;
+      transition: width .24s ease;
+      position: relative;
+      overflow: hidden;
     }
 
-    .progress-percent {
-      margin-top: 10px;
-      text-align: center;
-      font-weight: 1000;
-      color: var(--primary-dark);
+    .progress-fill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
+      animation: shine 1.2s ease-in-out infinite;
     }
 
-    .progress-note {
-      margin-top: 8px;
+    @keyframes shine {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(100%); }
+    }
+
+    .progress-scale {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 9px;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .join-progress-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 16px;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 850;
       text-align: center;
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 800;
+    }
+
+    .join-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--good);
+      box-shadow: 0 0 0 6px rgba(22,163,74,.12);
+    }
+
+    @media (max-width: 430px) {
+      .modal.join-modal {
+        width: 100%;
+      }
+
+      .modal.join-modal #modalTitle {
+        padding: 22px 18px 0;
+        gap: 8px;
+      }
+
+      .modal.join-modal #modalText {
+        margin: 8px 20px 0;
+      }
+
+      .progress-box {
+        margin: 18px 14px 18px;
+        padding: 15px;
+        border-radius: 18px;
+      }
+
+      .join-progress-head {
+        grid-template-columns: auto 1fr;
+      }
+
+      .progress-percent {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
     }
 
 
@@ -1399,9 +1572,12 @@
       const otherReady = playerIsReady(players, other);
       const ownReady = playerIsReady(players, multiplayer.playerNo) || !isDefaultPlayerName(playerName(multiplayer.playerNo));
 
-      if (state.screen === "settingsScreen" && !multiplayer.isCreator) {
-        $("waitingTitle").textContent = "Oyun ayarları hazırlanıyor";
-        $("waitingText").textContent = "Bağlantı kuruldu. Oyunu oluşturan kişi ayarları kaydedince oyun otomatik başlayacak.";
+      if (!multiplayer.isCreator && (state.screen === "settingsScreen" || state.screen === "waitingScreen")) {
+        const roomReady = roomData?.status === "ready";
+        $("waitingTitle").textContent = roomReady ? "Odaya bağlanıldı" : "Oyun ayarları hazırlanıyor";
+        $("waitingText").textContent = roomReady
+          ? "Oyuncu adın kaydedildi. Oyunu oluşturan telefon oyunu birazdan otomatik başlatacak."
+          : "Oyuncu adın kaydedildi. Oyunu oluşturan kişi ayarları kaydedince oyun otomatik başlayacak.";
       } else if (multiplayer.isCreator && state.screen === "waitingScreen") {
         $("waitingTitle").textContent = otherReady ? "Karşı oyuncu bağlandı" : "Karşı oyuncu bekleniyor";
         $("waitingText").textContent = otherReady
@@ -1612,7 +1788,7 @@
         const id = await roomKey(roomName);
         updateJoinProgress(30, "Şifre güvenli şekilde kontrol için hazırlanıyor.");
         const passwordHash = await sha256Hex(password);
-        updateJoinProgress(48, "Oyun odası Firebase üzerinde aranıyor.");
+        updateJoinProgress(48, "Oyun odası aranıyor.");
         const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
         const snap = await ref.once("value");
         updateJoinProgress(72, "Bağlantı bilgileri karşılaştırılıyor.");
@@ -1678,18 +1854,45 @@
             applyPlayersToState(data.players || {});
             setPlayerName(playerNo, name);
 
-            await ref.child("players/" + playerNo).update({
-              name,
-              role: "guest",
-              clientId: multiplayer.clientId,
-              joinedAt: firebase.database.ServerValue.TIMESTAMP,
-              lastSeen: firebase.database.ServerValue.TIMESTAMP
-            });
+            state.screen = "waitingScreen";
+            $("waitingTitle").textContent = data.status === "ready" ? "Odaya bağlanıldı" : "Odaya bağlanılıyor";
+            $("waitingText").textContent = data.status === "ready"
+              ? "Oyuncu adın kaydediliyor. Oyunu oluşturan telefon oyunu birazdan otomatik başlatacak."
+              : "Oyuncu adın kaydediliyor. Kurucu ayarları tamamladığında oyun otomatik başlayacak.";
+            const waitingInfo = $("waitingInfo");
+            if (waitingInfo) {
+              waitingInfo.className = "message online-status warn";
+              waitingInfo.innerHTML = `Oyuncu adın kaydediliyor: <strong>${name}</strong>`;
+            }
+            activateScreen("waitingScreen");
+            updateControlLocks();
 
-            listenRoom();
-            renderFromState();
-            updateWaitingRoom(data);
-            setOnlineStatus(`Bağlandın: <strong>${roomName}</strong>. Oyuncu adın: <strong>${name}</strong>`, "good");
+            try {
+              await ref.child("players/" + playerNo).update({
+                name,
+                role: "guest",
+                clientId: multiplayer.clientId,
+                joinedAt: firebase.database.ServerValue.TIMESTAMP,
+                lastSeen: firebase.database.ServerValue.TIMESTAMP
+              });
+
+              listenRoom();
+              const latestSnap = await ref.once("value");
+              const latestData = latestSnap.val() || data;
+              applyPlayersToState(latestData.players || {});
+              updateWaitingRoom(latestData);
+              setOnlineStatus(`Bağlandın: <strong>${roomName}</strong>. Oyuncu adın: <strong>${name}</strong>`, "good");
+            } catch (e) {
+              playTone("error");
+              leaveOnlineSilently();
+              showSimpleModal(
+                "Bağlantı Sorunu",
+                "Oyuncu adın odaya kaydedilemedi. İnternet bağlantısını kontrol edip tekrar katılmayı dene.",
+                "Tamam",
+                () => showScreen("menuScreen")
+              );
+              setOnlineStatus("Oyuncu adı odaya kaydedilemedi. Tekrar dene.", "bad");
+            }
           },
           () => {
             setOnlineStatus("Bağlantı doğrulandı ancak oyuncu adı girilmediği için katılım tamamlanmadı.", "warn");
@@ -1710,7 +1913,7 @@
 
       showConfirmModal(
         "Bağlantıyı Kapat",
-        "Çevrim içi oyundan ayrılmak istediğinize emin misiniz? Bu oda Firebase tarafında temizlenir ve diğer oyuncuya bilgi verilir.",
+        "Çevrim içi oyundan ayrılmak istediğinize emin misiniz? Bu oda kapatılır ve diğer oyuncuya bilgi verilir.",
         "Evet, kapat",
         "Vazgeç",
         async () => {
@@ -1743,15 +1946,33 @@
 
     function showJoinProgressModal(text = "Bağlantı kontrol ediliyor...") {
       clearInterval(joinProgressTimer);
-      $("modalTitle").textContent = "Bağlantıya Katılınıyor";
+      document.querySelector(".modal").classList.add("join-modal");
+      $("modalTitle").innerHTML = `<span class="join-title-icon">🌐</span><span>Bağlantıya Katılınıyor</span>`;
       $("modalText").textContent = text;
       $("modalExtra").innerHTML = `
-        <div class="progress-box">
+        <div class="progress-box" aria-live="polite">
+          <div class="join-progress-head">
+            <div class="join-progress-icon">🔎</div>
+            <div>
+              <div class="join-progress-label">Bağlantı kontrolü yapılıyor</div>
+              <div id="joinProgressNote" class="progress-note">Bağlantı adı ve şifre hazırlanıyor.</div>
+            </div>
+            <div id="joinProgressPercent" class="progress-percent">0%</div>
+          </div>
+
           <div class="progress-track">
             <div id="joinProgressFill" class="progress-fill"></div>
           </div>
-          <div id="joinProgressPercent" class="progress-percent">0%</div>
-          <div id="joinProgressNote" class="progress-note">Bağlantı adı ve şifre hazırlanıyor.</div>
+
+          <div class="progress-scale">
+            <span>0%</span>
+            <span>100%</span>
+          </div>
+
+          <div class="join-progress-footer">
+            <span class="join-dot"></span>
+            <span>Oyun odası aranıyor, lütfen bekleyin.</span>
+          </div>
         </div>
       `;
       $("modalButtons").innerHTML = "";
@@ -1761,7 +1982,7 @@
       joinProgressTimer = setInterval(() => {
         if (current < 88) {
           current += current < 45 ? 4 : 2;
-          updateJoinProgress(current, current < 45 ? "Oyun odası aranıyor." : "Firebase bağlantısı kontrol ediliyor.");
+          updateJoinProgress(current, current < 45 ? "Oyun odası aranıyor." : "Bağlantı güvenli şekilde kontrol ediliyor.");
         }
       }, 180);
     }
@@ -2478,6 +2699,8 @@
 
     function closeModal() {
       $("modalBackdrop").classList.remove("active");
+      const modal = document.querySelector(".modal");
+      if (modal) modal.classList.remove("join-modal");
     }
 
     function backToMenu() {
@@ -2485,13 +2708,13 @@
       if (multiplayer.enabled) {
         showConfirmModal(
           "Ana Menüye Dön",
-          "Çevrim içi oyundan ayrılmak istediğinize emin misiniz? Bu oyun iptal edilir, Firebase tarafında yalnızca bu oda temizlenir ve diğer oyuncu bilgilendirilir.",
+          "Çevrim içi oyundan ayrılmak istediğinize emin misiniz? Bu oyun iptal edilir ve diğer oyuncu bilgilendirilir.",
           "Evet, ayrıl",
           "Vazgeç",
           async () => {
             await cancelOnlineRoom("ana menüye döndü");
             showScreen("menuScreen");
-            setOnlineStatus("Çevrim içi oyun iptal edildi ve oda temizlendi.", "warn");
+            setOnlineStatus("Çevrim içi oyun iptal edildi.", "warn");
           }
         );
         return;
@@ -2502,7 +2725,7 @@
     function exitGame() {
       showConfirmModal(
         "Oyundan Çık",
-        "Oyundan çıkmak istediğinize emin misiniz? Çevrim içi oyun açıksa diğer oyuncuya bilgi verilir ve bu oyuna ait Firebase oda bilgileri temizlenir.",
+        "Oyundan çıkmak istediğinize emin misiniz? Çevrim içi oyun açıksa diğer oyuncuya bilgi verilir ve oda kapatılır.",
         "Evet, çık",
         "Vazgeç",
         async () => {
