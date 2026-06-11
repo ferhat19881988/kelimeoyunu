@@ -823,6 +823,50 @@
     }
 
 
+    .modal.name-modal {
+      width: min(430px, calc(100vw - 24px));
+      padding: 22px;
+      text-align: center;
+      border-radius: 22px;
+    }
+
+    .modal.name-modal #modalTitle {
+      font-size: clamp(22px, 5vw, 28px);
+      line-height: 1.15;
+      letter-spacing: -.4px;
+    }
+
+    .modal.name-modal #modalText {
+      margin: 8px 0 14px;
+      font-size: 15px !important;
+      line-height: 1.4;
+    }
+
+    .modal.name-modal #modalExtra input {
+      height: 54px;
+      border-radius: 16px;
+      font-size: 17px;
+    }
+
+    .modal.name-modal #modalButtons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 430px) {
+      .modal.name-modal {
+        width: 100%;
+        padding: 18px 14px;
+      }
+
+      .modal.name-modal #modalButtons {
+        flex-direction: column;
+      }
+    }
+
+
     .settings-panel {
       margin-top: 0;
     }
@@ -1242,6 +1286,16 @@
 
     const $ = (id) => document.getElementById(id);
 
+
+    let onlineActionBusy = false;
+
+    function setOnlineActionBusy(isBusy) {
+      onlineActionBusy = isBusy;
+      document.querySelectorAll(".online-box .mode-actions button").forEach(btn => {
+        btn.disabled = isBusy;
+      });
+    }
+
     function setOnlineStatus(text, type = "") {
       const el = $("onlineStatus");
       if (!el) return;
@@ -1304,6 +1358,11 @@
       const normalized = sanitizeRoomName(roomName);
       const hex = await sha256Hex(normalized);
       return "room_" + hex.slice(0, 32);
+    }
+
+    function isReusableStaleRoom(roomData) {
+      const status = roomData?.status;
+      return status === "ended" || status === "cancelled";
     }
 
     function getRoomInputs() {
@@ -1891,6 +1950,7 @@
     }
 
     async function createOnlineRoom() {
+      if (onlineActionBusy) return;
       if (!initFirebaseIfNeeded()) return;
 
       const {roomName, password} = getRoomInputs();
@@ -1898,67 +1958,101 @@
       if (!roomName || !password) {
         playTone("error");
         setOnlineStatus("Bağlantı adı ve şifre boş olamaz.", "bad");
+        showSimpleModal("Uyarı", "Bağlantı adı ve şifre boş olamaz.", "Tamam");
         return;
       }
 
-      const id = await roomKey(roomName);
-      const passwordHash = await sha256Hex(password);
-      const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
-      const existing = await ref.once("value");
+      setOnlineActionBusy(true);
+      setOnlineStatus("Bağlantı adı kontrol ediliyor...", "warn");
 
-      if (existing.exists()) {
-        setOnlineStatus("Bu bağlantı adı zaten var. Farklı bir bağlantı adı seç veya “Bağlantıya Katıl” butonunu kullan.", "bad");
-        return;
+      try {
+        const id = await roomKey(roomName);
+        const passwordHash = await sha256Hex(password);
+        const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
+
+        multiplayer.enabled = true;
+        multiplayer.isCreator = true;
+        multiplayer.cancelling = false;
+        multiplayer.ending = false;
+        multiplayer.roomName = roomName;
+        multiplayer.roomId = id;
+        multiplayer.playerNo = playerNo;
+        multiplayer.passwordHash = passwordHash;
+        multiplayer.roomRef = ref;
+
+        state.p1 = "1. Oyuncu";
+        state.p2 = "2. Oyuncu";
+        state.totalSeries = 2;
+        state.wordCount = 5;
+        state.currentSeries = 1;
+        state.startSetter = 1;
+        state.setter = 1;
+        state.guesser = 2;
+        state.scores = {1: 0, 2: 0};
+        resetTurn();
+        state.screen = "settingsScreen";
+
+        const newRoomData = {
+          roomName,
+          passwordHash,
+          status: "settings",
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          createdBy: multiplayer.clientId,
+          creatorPlayerNo: playerNo,
+          players: {
+            [playerNo]: {
+              role: "creator",
+              clientId: multiplayer.clientId,
+              joinedAt: firebase.database.ServerValue.TIMESTAMP,
+              lastSeen: firebase.database.ServerValue.TIMESTAMP
+            }
+          },
+          gameState: serializableState()
+        };
+
+        const result = await new Promise((resolve, reject) => {
+          ref.transaction(
+            currentData => {
+              if (currentData && !isReusableStaleRoom(currentData)) return;
+              return newRoomData;
+            },
+            (error, committed, snapshot) => {
+              if (error) reject(error);
+              else resolve({committed, snapshot});
+            },
+            false
+          );
+        });
+
+        if (!result.committed) {
+          playTone("error");
+          leaveOnlineSilently();
+          const warning = "Bu bağlantı adı zaten var. Farklı bir bağlantı adı seç veya mevcut oyuna katıl.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Bağlantı adı kullanılıyor", warning, "Tamam", () => {
+            const input = $("roomName");
+            if (input) input.focus();
+          });
+          return;
+        }
+
+        listenRoom();
+        setupDisconnectCleanup();
+        clearSettingsForm();
+        showScreen("settingsScreen");
+        setOnlineStatus(`Bağlantı oluşturuldu: <strong>${escapeHtml(roomName)}</strong>. Sadece kendi adını ve ayarları gir; sonra bekleme odası açılacak.`, "good");
+      } catch (e) {
+        playTone("error");
+        leaveOnlineSilently();
+        setOnlineStatus("Bağlantı oluşturulamadı. İnternet bağlantısını kontrol edip tekrar dene.", "bad");
+        showSimpleModal("Bağlantı Sorunu", "Bağlantı oluşturulamadı. İnternet bağlantısını kontrol edip tekrar dene.", "Tamam");
+      } finally {
+        setOnlineActionBusy(false);
       }
-
-      multiplayer.enabled = true;
-      multiplayer.isCreator = true;
-      multiplayer.cancelling = false;
-      multiplayer.ending = false;
-      multiplayer.roomName = roomName;
-      multiplayer.roomId = id;
-      multiplayer.playerNo = playerNo;
-      multiplayer.passwordHash = passwordHash;
-      multiplayer.roomRef = ref;
-
-      state.p1 = "1. Oyuncu";
-      state.p2 = "2. Oyuncu";
-      state.totalSeries = 2;
-      state.wordCount = 5;
-      state.currentSeries = 1;
-      state.startSetter = 1;
-      state.setter = 1;
-      state.guesser = 2;
-      state.scores = {1: 0, 2: 0};
-      resetTurn();
-      state.screen = "settingsScreen";
-
-      await ref.set({
-        roomName,
-        passwordHash,
-        status: "settings",
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        createdBy: multiplayer.clientId,
-        creatorPlayerNo: playerNo,
-        players: {
-          [playerNo]: {
-            role: "creator",
-            clientId: multiplayer.clientId,
-            joinedAt: firebase.database.ServerValue.TIMESTAMP,
-            lastSeen: firebase.database.ServerValue.TIMESTAMP
-          }
-        },
-        gameState: serializableState()
-      });
-
-      listenRoom();
-      setupDisconnectCleanup();
-      clearSettingsForm();
-      showScreen("settingsScreen");
-      setOnlineStatus(`Bağlantı oluşturuldu: <strong>${escapeHtml(roomName)}</strong>. Sadece kendi adını ve ayarları gir; sonra bekleme odası açılacak.`, "good");
     }
 
     async function joinOnlineRoom() {
+      if (onlineActionBusy) return;
       if (!initFirebaseIfNeeded()) return;
 
       const {roomName, password} = getRoomInputs();
@@ -1966,61 +2060,63 @@
       if (!roomName || !password) {
         playTone("error");
         setOnlineStatus("Bağlantıya katılmak için bağlantı adı ve şifre yazmalısın.", "bad");
+        showSimpleModal("Uyarı", "Bağlantıya katılmak için bağlantı adı ve şifre yazmalısın.", "Tamam");
         return;
       }
 
-      showJoinProgressModal("Bağlantı bilgileri kontrol ediliyor...");
+      setOnlineActionBusy(true);
+      setOnlineStatus("Bağlantı kontrol ediliyor...", "warn");
 
       try {
-        updateJoinProgress(15, "Bağlantı adı hazırlanıyor.");
         const id = await roomKey(roomName);
-        updateJoinProgress(30, "Şifre güvenli şekilde kontrol için hazırlanıyor.");
         const passwordHash = await sha256Hex(password);
-        updateJoinProgress(48, "Oyun odası aranıyor.");
         const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
         const snap = await ref.once("value");
-        updateJoinProgress(72, "Bağlantı bilgileri karşılaştırılıyor.");
         const data = snap.val();
 
         if (!data) {
           playTone("error");
-          await finishJoinProgress("Bağlantı adı kontrol edildi.");
-          setOnlineStatus("Bağlantı adı uyuşmuyor. Bu adla açılmış bir oyun bulunamadı.", "bad");
+          const warning = "Bağlantı adı uyuşmuyor. Bu adla açılmış bir oyun bulunamadı.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Bağlantı Bulunamadı", warning, "Tamam");
           return;
         }
 
         if (data.passwordHash !== passwordHash) {
           playTone("error");
-          await finishJoinProgress("Şifre kontrol edildi.");
-          setOnlineStatus("Şifre uyuşmuyor. Bağlantıya katılınamadı.", "bad");
+          const warning = "Şifre uyuşmuyor. Bağlantıya katılınamadı.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Şifre Hatalı", warning, "Tamam");
           return;
         }
 
         if (data.status === "cancelled" || data.status === "ended") {
-          await finishJoinProgress("Bağlantı durumu kontrol edildi.");
-          setOnlineStatus("Bu bağlantı artık aktif değil. Yeni bağlantı oluşturulmalı.", "bad");
+          const warning = "Bu bağlantı artık aktif değil. Yeni bağlantı oluşturulmalı.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Bağlantı Aktif Değil", warning, "Tamam");
           return;
         }
 
         if (data.status === "playing") {
-          await finishJoinProgress("Oyun durumu kontrol edildi.");
-          setOnlineStatus("Bu oyuna başlanmış. Yeni oyuncu katılamaz.", "bad");
+          const warning = "Bu oyuna başlanmış. Yeni oyuncu katılamaz.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Oyun Başlamış", warning, "Tamam");
           return;
         }
 
         const selectedPlayer = playerRecord(data.players || {}, playerNo);
         if (selectedPlayer?.clientId && selectedPlayer.clientId !== multiplayer.clientId) {
-          await finishJoinProgress("Oyuncu durumu kontrol edildi.");
-          setOnlineStatus("Bu bağlantıya 2. oyuncu zaten katılmış. Yeni oyun için farklı bir bağlantı adı kullanılmalı.", "bad");
+          const warning = "Bu bağlantıya 2. oyuncu zaten katılmış. Yeni oyun için farklı bir bağlantı adı kullanılmalı.";
+          setOnlineStatus(warning, "bad");
+          showSimpleModal("Oyuncu Zaten Var", warning, "Tamam");
           return;
         }
 
-        updateJoinProgress(92, "Bağlantı doğrulandı. Oyuncu adı ekranı hazırlanıyor.");
-        await finishJoinProgress("Bağlantı doğrulandı.");
+        setOnlineStatus("Bağlantı doğrulandı. Oyuncu adını yaz.", "good");
 
         showNameModal(
           "Oyuncu Adı",
-          "Bağlantı bilgileri doğru. Oyuna katılmak için kendi adını yaz.",
+          "Bağlantı doğru. Oyuna katılmak için kendi adını yaz.",
           async (name) => {
             multiplayer.enabled = true;
             multiplayer.isCreator = false;
@@ -2056,20 +2152,27 @@
             updateControlLocks();
 
             try {
-              await ref.child("players/" + playerNo).update({
+              const playerData = {
                 name,
                 role: "guest",
                 clientId: multiplayer.clientId,
                 joinedAt: firebase.database.ServerValue.TIMESTAMP,
                 lastSeen: firebase.database.ServerValue.TIMESTAMP
-              });
+              };
+
+              await ref.child("players/" + playerNo).update(playerData);
 
               listenRoom();
               setupDisconnectCleanup();
-              const latestSnap = await ref.once("value");
-              const latestData = latestSnap.val() || data;
-              applyPlayersToState(latestData.players || {});
-              updateWaitingRoom(latestData);
+              const localRoomData = {
+                ...data,
+                players: {
+                  ...(data.players || {}),
+                  [playerNo]: playerData
+                }
+              };
+              applyPlayersToState(localRoomData.players || {});
+              updateWaitingRoom(localRoomData);
               setOnlineStatus(`Bağlandın: <strong>${escapeHtml(roomName)}</strong>. Oyuncu adın: <strong>${escapeHtml(name)}</strong>`, "good");
             } catch (e) {
               playTone("error");
@@ -2089,8 +2192,10 @@
         );
       } catch (e) {
         playTone("error");
-        closeJoinProgressModal();
         setOnlineStatus("Bağlantıya katılırken sorun oluştu. İnternet bağlantısını kontrol edip tekrar dene.", "bad");
+        showSimpleModal("Bağlantı Sorunu", "Bağlantıya katılırken sorun oluştu. İnternet bağlantısını kontrol edip tekrar dene.", "Tamam");
+      } finally {
+        setOnlineActionBusy(false);
       }
     }
 
@@ -2223,6 +2328,7 @@
     }
 
     function showNameModal(title, text, onSave, onCancel = null) {
+      document.querySelector(".modal").classList.add("name-modal");
       $("modalTitle").textContent = title;
       $("modalText").textContent = text;
       $("modalExtra").innerHTML = `<input id="modalNameInput" maxlength="18" placeholder="Adını yaz" autocomplete="off" />`;
@@ -2316,6 +2422,27 @@
       } catch (e) {
         try { await ref.remove(); } catch (ignore) {}
       }
+
+      leaveOnlineSilently();
+    }
+
+    async function cleanupCurrentOnlineRoom() {
+      const ref = multiplayer.roomRef;
+
+      if (!ref) {
+        leaveOnlineSilently();
+        return;
+      }
+
+      multiplayer.cancelling = true;
+      clearDisconnectCleanup();
+      clearTimeout(multiplayer.syncTimer);
+      clearTimeout(multiplayer.cleanupTimer);
+
+      try {
+        ref.off();
+        await ref.remove();
+      } catch (e) {}
 
       leaveOnlineSilently();
     }
@@ -3049,11 +3176,18 @@
     function closeModal() {
       $("modalBackdrop").classList.remove("active");
       const modal = document.querySelector(".modal");
-      if (modal) modal.classList.remove("join-modal");
+      if (modal) modal.classList.remove("join-modal", "name-modal");
     }
 
-    function backToMenu() {
+    async function backToMenu() {
       closeModal();
+      if (multiplayer.enabled && (multiplayer.ending || state.screen === "endScreen")) {
+        await cleanupCurrentOnlineRoom();
+        showScreen("menuScreen");
+        setOnlineStatus("Oyun bittiği için çevrim içi oda temizlendi.", "warn");
+        return;
+      }
+
       if (multiplayer.enabled) {
         showConfirmModal(
           "Ana Menüye Dön",
@@ -3079,7 +3213,11 @@
         "Vazgeç",
         async () => {
           if (multiplayer.enabled) {
-            await cancelOnlineRoom("oyundan çıktı");
+            if (multiplayer.ending || state.screen === "endScreen") {
+              await cleanupCurrentOnlineRoom();
+            } else {
+              await cancelOnlineRoom("oyundan çıktı");
+            }
           }
           window.location.href = "https://www.google.com.tr";
         }
