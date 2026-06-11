@@ -474,7 +474,7 @@
 
     .online-form {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
       align-items: end;
       margin-top: 20px;
@@ -612,6 +612,44 @@
     }
 
 
+    .progress-box {
+      margin-top: 18px;
+      text-align: left;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 18px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(34, 61, 92, .12);
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--good));
+      border-radius: 999px;
+      transition: width .22s ease;
+    }
+
+    .progress-percent {
+      margin-top: 10px;
+      text-align: center;
+      font-weight: 1000;
+      color: var(--primary-dark);
+    }
+
+    .progress-note {
+      margin-top: 8px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+
     .settings-panel {
       margin-top: 0;
     }
@@ -707,7 +745,7 @@
             </div>
           </div>
 
-          <div class="grid three">
+          <div class="grid">
             <div>
               <label for="seriesCount">Kaç seri oynansın?</label>
               <input id="seriesCount" type="number" min="2" max="10" value="2" />
@@ -715,13 +753,6 @@
             <div>
               <label for="wordCount">Kaç kelime yazılsın?</label>
               <input id="wordCount" type="number" min="3" max="10" value="5" />
-            </div>
-            <div>
-              <label for="startSetter">İlk kelimeleri kim yazsın?</label>
-              <select id="startSetter">
-                <option value="1">1. Oyuncu</option>
-                <option value="2">2. Oyuncu</option>
-              </select>
             </div>
           </div>
 
@@ -1169,8 +1200,8 @@
       $("settingsBadge").textContent = onlineCreator ? "Çevrim İçi Oyun" : "Tek Telefon Oyunu";
       $("settingsTitle").textContent = onlineCreator ? "Çevrim İçi Oyun Ayarları" : "Tek Telefon Oyun Ayarları";
       $("settingsSubtitle").textContent = onlineCreator
-        ? "Bu ekranda sadece kendi adını ve oyun ayarlarını belirle. Karşı oyuncu bağlantıya katılınca kendi adını kendisi yazacak."
-        : "Oyuncu adlarını, seri sayısını ve kelime sayısını belirle.";
+        ? "Bu ekranda sadece kendi adını ve oyun ayarlarını belirle. Kurucu 1. oyuncu, katılan kişi 2. oyuncu olur."
+        : "Oyuncu adlarını, seri sayısını ve kelime sayısını belirle. Oyuna 1. oyuncu başlar.";
       $("settingsMessage").textContent = onlineCreator
         ? "Ayarları kaydedince bekleme odası açılır. Karşı oyuncu bağlanıp adını yazınca oyun otomatik başlar."
         : "Oyuna başlamadan önce iki oyuncunun adını yaz.";
@@ -1182,7 +1213,7 @@
       $("p2Name").value = "";
       $("seriesCount").value = 2;
       $("wordCount").value = 5;
-      $("startSetter").value = 1;
+      state.startSetter = 1;
       updateSettingsHeader();
     }
 
@@ -1191,7 +1222,7 @@
       $("p2Name").value = state.p2 && !isDefaultPlayerName(state.p2) ? state.p2 : "";
       $("seriesCount").value = state.totalSeries || 2;
       $("wordCount").value = state.wordCount || 5;
-      $("startSetter").value = state.startSetter || 1;
+      state.startSetter = 1;
       updateSettingsHeader();
     }
 
@@ -1252,8 +1283,8 @@
       state.wordCount = Math.max(3, Math.min(10, Number($("wordCount").value) || 5));
       $("seriesCount").value = state.totalSeries;
       $("wordCount").value = state.wordCount;
-      state.startSetter = Number($("startSetter").value) === 2 ? 2 : 1;
-      state.setter = state.startSetter;
+      state.startSetter = 1;
+      state.setter = 1;
       state.guesser = state.setter === 1 ? 2 : 1;
       state.currentSeries = 1;
       state.scores = {1: 0, 2: 0};
@@ -1317,6 +1348,7 @@
       multiplayer.applyingRemote = true;
 
       Object.assign(state, remoteState);
+      state.startSetter = 1;
       state.scores = {
         1: Number(remoteState.scores?.[1] ?? remoteState.scores?.["1"] ?? 0),
         2: Number(remoteState.scores?.[2] ?? remoteState.scores?.["2"] ?? 0)
@@ -1420,7 +1452,7 @@
       leaveOnlineSilently();
       showSimpleModal(
         "Oyun iptal edildi",
-        `${leftName} oyundan ayrıldı. Bu oyuna ait Firebase oda bilgileri temizlendi.`,
+        `${leftName} oyundan ayrıldı.`,
         "Ana Menü",
         () => showScreen("menuScreen")
       );
@@ -1573,80 +1605,101 @@
         return;
       }
 
-      const id = await roomKey(roomName);
-      const passwordHash = await sha256Hex(password);
-      const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
-      const snap = await ref.once("value");
-      const data = snap.val();
+      showJoinProgressModal("Bağlantı bilgileri kontrol ediliyor...");
 
-      if (!data) {
-        playTone("error");
-        setOnlineStatus("Bağlantı adı uyuşmuyor. Bu adla açılmış bir oyun bulunamadı.", "bad");
-        return;
-      }
+      try {
+        updateJoinProgress(15, "Bağlantı adı hazırlanıyor.");
+        const id = await roomKey(roomName);
+        updateJoinProgress(30, "Şifre güvenli şekilde kontrol için hazırlanıyor.");
+        const passwordHash = await sha256Hex(password);
+        updateJoinProgress(48, "Oyun odası Firebase üzerinde aranıyor.");
+        const ref = firebase.database().ref(FIREBASE_ROOT + "/rooms/" + id);
+        const snap = await ref.once("value");
+        updateJoinProgress(72, "Bağlantı bilgileri karşılaştırılıyor.");
+        const data = snap.val();
 
-      if (data.passwordHash !== passwordHash) {
-        playTone("error");
-        setOnlineStatus("Şifre uyuşmuyor. Bağlantıya katılınamadı.", "bad");
-        return;
-      }
-
-      if (data.status === "cancelled" || data.status === "ended") {
-        setOnlineStatus("Bu bağlantı artık aktif değil. Yeni bağlantı oluşturulmalı.", "bad");
-        return;
-      }
-
-      if (data.status === "playing") {
-        setOnlineStatus("Bu oyuna başlanmış. Yeni oyuncu katılamaz.", "bad");
-        return;
-      }
-
-      const selectedPlayer = playerRecord(data.players || {}, playerNo);
-      if (selectedPlayer?.clientId && selectedPlayer.clientId !== multiplayer.clientId) {
-        setOnlineStatus("Bu bağlantıya 2. oyuncu zaten katılmış. Yeni oyun için farklı bir bağlantı adı kullanılmalı.", "bad");
-        return;
-      }
-
-      showNameModal(
-        "Oyuncu Adı",
-        "Bağlantı bilgileri doğru. Oyuna katılmak için kendi adını yaz.",
-        async (name) => {
-          multiplayer.enabled = true;
-          multiplayer.isCreator = false;
-          multiplayer.cancelling = false;
-          multiplayer.ending = false;
-          multiplayer.roomName = roomName;
-          multiplayer.roomId = id;
-          multiplayer.playerNo = playerNo;
-          multiplayer.passwordHash = passwordHash;
-          multiplayer.roomRef = ref;
-
-          if (data.gameState) Object.assign(state, data.gameState);
-          state.scores = {
-            1: Number(data.gameState?.scores?.[1] ?? data.gameState?.scores?.["1"] ?? 0),
-            2: Number(data.gameState?.scores?.[2] ?? data.gameState?.scores?.["2"] ?? 0)
-          };
-          state.words = Array.isArray(data.gameState?.words) ? data.gameState.words : Object.values(data.gameState?.words || {});
-          applyPlayersToState(data.players || {});
-          setPlayerName(playerNo, name);
-
-          await ref.child("players/" + playerNo).update({
-            name,
-            role: "guest",
-            clientId: multiplayer.clientId,
-            joinedAt: firebase.database.ServerValue.TIMESTAMP,
-            lastSeen: firebase.database.ServerValue.TIMESTAMP
-          });
-
-          listenRoom();
-          renderFromState();
-          updateWaitingRoom(data);
-          setOnlineStatus(`Bağlandın: <strong>${roomName}</strong>. Oyuncu adın: <strong>${name}</strong>`, "good");
-        },
-        () => {
-          setOnlineStatus("Bağlantı doğrulandı ancak oyuncu adı girilmediği için katılım tamamlanmadı.", "warn");
+        if (!data) {
+          playTone("error");
+          await finishJoinProgress("Bağlantı adı kontrol edildi.");
+          setOnlineStatus("Bağlantı adı uyuşmuyor. Bu adla açılmış bir oyun bulunamadı.", "bad");
+          return;
         }
-      );
+
+        if (data.passwordHash !== passwordHash) {
+          playTone("error");
+          await finishJoinProgress("Şifre kontrol edildi.");
+          setOnlineStatus("Şifre uyuşmuyor. Bağlantıya katılınamadı.", "bad");
+          return;
+        }
+
+        if (data.status === "cancelled" || data.status === "ended") {
+          await finishJoinProgress("Bağlantı durumu kontrol edildi.");
+          setOnlineStatus("Bu bağlantı artık aktif değil. Yeni bağlantı oluşturulmalı.", "bad");
+          return;
+        }
+
+        if (data.status === "playing") {
+          await finishJoinProgress("Oyun durumu kontrol edildi.");
+          setOnlineStatus("Bu oyuna başlanmış. Yeni oyuncu katılamaz.", "bad");
+          return;
+        }
+
+        const selectedPlayer = playerRecord(data.players || {}, playerNo);
+        if (selectedPlayer?.clientId && selectedPlayer.clientId !== multiplayer.clientId) {
+          await finishJoinProgress("Oyuncu durumu kontrol edildi.");
+          setOnlineStatus("Bu bağlantıya 2. oyuncu zaten katılmış. Yeni oyun için farklı bir bağlantı adı kullanılmalı.", "bad");
+          return;
+        }
+
+        updateJoinProgress(92, "Bağlantı doğrulandı. Oyuncu adı ekranı hazırlanıyor.");
+        await finishJoinProgress("Bağlantı doğrulandı.");
+
+        showNameModal(
+          "Oyuncu Adı",
+          "Bağlantı bilgileri doğru. Oyuna katılmak için kendi adını yaz.",
+          async (name) => {
+            multiplayer.enabled = true;
+            multiplayer.isCreator = false;
+            multiplayer.cancelling = false;
+            multiplayer.ending = false;
+            multiplayer.roomName = roomName;
+            multiplayer.roomId = id;
+            multiplayer.playerNo = playerNo;
+            multiplayer.passwordHash = passwordHash;
+            multiplayer.roomRef = ref;
+
+            if (data.gameState) Object.assign(state, data.gameState);
+            state.startSetter = 1;
+            state.scores = {
+              1: Number(data.gameState?.scores?.[1] ?? data.gameState?.scores?.["1"] ?? 0),
+              2: Number(data.gameState?.scores?.[2] ?? data.gameState?.scores?.["2"] ?? 0)
+            };
+            state.words = Array.isArray(data.gameState?.words) ? data.gameState.words : Object.values(data.gameState?.words || {});
+            applyPlayersToState(data.players || {});
+            setPlayerName(playerNo, name);
+
+            await ref.child("players/" + playerNo).update({
+              name,
+              role: "guest",
+              clientId: multiplayer.clientId,
+              joinedAt: firebase.database.ServerValue.TIMESTAMP,
+              lastSeen: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            listenRoom();
+            renderFromState();
+            updateWaitingRoom(data);
+            setOnlineStatus(`Bağlandın: <strong>${roomName}</strong>. Oyuncu adın: <strong>${name}</strong>`, "good");
+          },
+          () => {
+            setOnlineStatus("Bağlantı doğrulandı ancak oyuncu adı girilmediği için katılım tamamlanmadı.", "warn");
+          }
+        );
+      } catch (e) {
+        playTone("error");
+        closeJoinProgressModal();
+        setOnlineStatus("Bağlantıya katılırken sorun oluştu. İnternet bağlantısını kontrol edip tekrar dene.", "bad");
+      }
     }
 
     function leaveOnlineRoom() {
@@ -1683,6 +1736,62 @@
       multiplayer.cancelling = false;
       multiplayer.ending = false;
       clearOnlineForm();
+    }
+
+
+    let joinProgressTimer = null;
+
+    function showJoinProgressModal(text = "Bağlantı kontrol ediliyor...") {
+      clearInterval(joinProgressTimer);
+      $("modalTitle").textContent = "Bağlantıya Katılınıyor";
+      $("modalText").textContent = text;
+      $("modalExtra").innerHTML = `
+        <div class="progress-box">
+          <div class="progress-track">
+            <div id="joinProgressFill" class="progress-fill"></div>
+          </div>
+          <div id="joinProgressPercent" class="progress-percent">0%</div>
+          <div id="joinProgressNote" class="progress-note">Bağlantı adı ve şifre hazırlanıyor.</div>
+        </div>
+      `;
+      $("modalButtons").innerHTML = "";
+      $("modalBackdrop").classList.add("active");
+      updateJoinProgress(4, "Bağlantı adı ve şifre hazırlanıyor.");
+      let current = 4;
+      joinProgressTimer = setInterval(() => {
+        if (current < 88) {
+          current += current < 45 ? 4 : 2;
+          updateJoinProgress(current, current < 45 ? "Oyun odası aranıyor." : "Firebase bağlantısı kontrol ediliyor.");
+        }
+      }, 180);
+    }
+
+    function updateJoinProgress(percent, note = "") {
+      const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+      const fill = $("joinProgressFill");
+      const label = $("joinProgressPercent");
+      const noteEl = $("joinProgressNote");
+      if (fill) fill.style.width = safePercent + "%";
+      if (label) label.textContent = safePercent + "%";
+      if (noteEl && note) noteEl.textContent = note;
+    }
+
+    function closeJoinProgressModal() {
+      clearInterval(joinProgressTimer);
+      joinProgressTimer = null;
+      closeModal();
+    }
+
+    function finishJoinProgress(note = "Kontrol tamamlandı.") {
+      clearInterval(joinProgressTimer);
+      joinProgressTimer = null;
+      updateJoinProgress(100, note);
+      return new Promise(resolve => {
+        setTimeout(() => {
+          closeModal();
+          resolve();
+        }, 360);
+      });
     }
 
     function showNameModal(title, text, onSave, onCancel = null) {
@@ -1930,9 +2039,9 @@
       state.p2 = state.lastSettings.p2;
       state.totalSeries = state.lastSettings.totalSeries;
       state.wordCount = state.lastSettings.wordCount;
-      state.startSetter = state.lastSettings.startSetter;
+      state.startSetter = 1;
       state.onlineCheck = state.lastSettings.onlineCheck;
-      state.setter = state.startSetter;
+      state.setter = 1;
       state.guesser = state.setter === 1 ? 2 : 1;
       state.currentSeries = 1;
       state.scores = {1: 0, 2: 0};
@@ -2355,7 +2464,7 @@
 
     function showRules() {
       $("modalTitle").textContent = "Oyun Kuralları";
-      $("modalText").textContent = "Bir oyuncu seçilen sayıda kelime yazar. İlk kelime açık görünür. Diğer oyuncu 2. kelimeden başlayarak her kelimeyi bulmaya çalışır. Her kelime için 5 hak vardır ve doğru bilinince haklar yeniden 5 olur.";
+      $("modalText").textContent = "1. oyuncu seçilen sayıda kelime yazar. İlk kelime açık görünür. 2. oyuncu ikinci kelimeden başlayarak her kelimeyi bulmaya çalışır. Sonraki turda roller sırayla değişir. Her kelime için 5 hak vardır ve doğru bilinince haklar yeniden 5 olur.";
       $("modalExtra").innerHTML = `
         <div>✅ Tüm kelimeleri bulursa: +1 puan</div>
         <div>⭐ Hiç yanlış yapmadan bulursa: +2 puan</div>
