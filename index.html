@@ -834,6 +834,23 @@
     .hidden {
       display: none !important;
     }
+
+
+    .turn-lock-note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #eef2ff;
+      color: var(--primary-dark);
+      border: 1px solid rgba(79,70,229,.18);
+      font-weight: 900;
+      line-height: 1.4;
+    }
+
+    .watching-word {
+      letter-spacing: 0;
+      font-size: clamp(16px, 2.5vw, 22px);
+    }
   </style>
 </head>
 <body>
@@ -982,7 +999,7 @@
             <button id="confirmWordBtn" onclick="confirmEntryWord()">Kelimeyi Onayla</button>
             <button id="editLastWordBtn" class="btn-warn" onclick="editLastWord()" disabled>Son Kelimeyi Düzelt</button>
             <button id="passToGuesserBtn" class="btn-good" onclick="goToGuess()" disabled>İkinci Kişiye Geç</button>
-            <button class="btn-light" onclick="clearCurrentWords()">Kelimeleri Temizle</button>
+            <button id="clearWordsBtn" class="btn-light" onclick="clearCurrentWords()">Kelimeleri Temizle</button>
           </div>
 
           <div id="entryMessage" class="message">İlk kelimeyi yazıp onayla.</div>
@@ -1032,8 +1049,8 @@
           <input id="guessWord" class="word-input" autocomplete="off" maxlength="18" placeholder="TAHMİN" />
 
           <div class="btn-row">
-            <button onclick="submitGuess()">Tamam</button>
-            <button class="btn-warn" onclick="challengeCurrentWord()">Hatalı Olduğunu Düşünüyorum</button>
+            <button id="submitGuessBtn" onclick="submitGuess()">Tamam</button>
+            <button id="challengeWordBtn" class="btn-warn" onclick="challengeCurrentWord()">Hatalı Olduğunu Düşünüyorum</button>
           </div>
 
           <div id="guessMessage" class="message">Tahminini yazıp Tamam'a bas.</div>
@@ -1167,6 +1184,8 @@
     ];
 
     const LOCAL_VALID_PAIRS = new Set(RAW_LOCAL_VALID_PAIRS.map(normalizeText));
+    const VALIDATION_CACHE = new Map();
+    const WIKI_SEARCH_TIMEOUT_MS = 1400;
 
     const FIREBASE_ROOT = "nehirmiraoyun";
 
@@ -1192,9 +1211,12 @@
       roomRef: null,
       syncTimer: null,
       cleanupTimer: null,
+      lastPresenceAt: 0,
       applyingRemote: false,
       cancelling: false,
-      ending: false
+      ending: false,
+      rematchClaiming: false,
+      rematchRoundStarted: null
     };
 
     const state = {
@@ -1499,18 +1521,28 @@
     function scheduleSync() {
       if (!multiplayer.enabled || !multiplayer.roomRef || multiplayer.applyingRemote) return;
       clearTimeout(multiplayer.syncTimer);
-      multiplayer.syncTimer = setTimeout(syncStateNow, 160);
+      multiplayer.syncTimer = setTimeout(syncStateNow, 45);
+    }
+
+    function syncImmediately() {
+      if (!multiplayer.enabled || !multiplayer.roomRef || multiplayer.applyingRemote) return;
+      clearTimeout(multiplayer.syncTimer);
+      syncStateNow();
     }
 
     async function syncStateNow() {
       if (!multiplayer.enabled || !multiplayer.roomRef || multiplayer.applyingRemote) return;
       try {
         await multiplayer.roomRef.child("gameState").set(serializableState());
-        multiplayer.roomRef.child("players/" + multiplayer.playerNo).update({
-          name: playerName(multiplayer.playerNo),
-          clientId: multiplayer.clientId,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP
-        });
+        const now = Date.now();
+        if (!multiplayer.lastPresenceAt || now - multiplayer.lastPresenceAt > 15000) {
+          multiplayer.lastPresenceAt = now;
+          multiplayer.roomRef.child("players/" + multiplayer.playerNo).update({
+            name: playerName(multiplayer.playerNo),
+            clientId: multiplayer.clientId,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP
+          });
+        }
       } catch (e) {
         setOnlineStatus("Oyun durumu çevrim içi kaydedilemedi. Bağlantıyı kontrol et.", "bad");
       }
@@ -1557,11 +1589,13 @@
         return;
       }
 
+      applyRematchRoleFromRoom(roomData);
       if (roomData.gameState) applyRemoteGameState(roomData.gameState);
       const namesChanged = applyPlayersToState(roomData.players || {});
       if (namesChanged && state.screen !== "settingsScreen") renderFromState();
       updateWaitingRoom(roomData);
       checkOnlineLobbyAutoStart(roomData);
+      handleOnlineRematchSnapshot(roomData);
     }
 
     function updateWaitingRoom(roomData = null) {
@@ -1588,7 +1622,7 @@
       if (info) {
         if (otherReady) {
           info.className = "message online-status good";
-          info.innerHTML = `Bağlanan oyuncu: <strong>${playerName(other)}</strong>`;
+          info.innerHTML = `Bağlanan oyuncu: <strong>${safePlayerName(other)}</strong>`;
         } else if (ownReady) {
           info.className = "message online-status warn";
           info.innerHTML = "Sen bağlantıdasın. Karşı oyuncu bekleniyor.";
@@ -1596,6 +1630,140 @@
           info.className = "message online-status warn";
           info.innerHTML = "Oyuncu adı bekleniyor.";
         }
+      }
+    }
+
+    function getRematchSlot(rematch) {
+      const players = rematch?.players || {};
+      for (const key of ["1", "2"]) {
+        if (players[key]?.clientId === multiplayer.clientId) return Number(key);
+      }
+      return 0;
+    }
+
+    function rematchPlayerName(rematch, num) {
+      const record = rematch?.players?.[String(num)] || rematch?.players?.[num];
+      return (record?.name || `${num}. Oyuncu`).trim().slice(0, 18) || `${num}. Oyuncu`;
+    }
+
+    function rematchBaseSettings(roomData = {}) {
+      const saved = roomData.rematch?.settings || roomData.gameState?.lastSettings || state.lastSettings || {};
+      return {
+        totalSeries: Math.max(2, Math.min(10, Number(saved.totalSeries || state.totalSeries || 2))),
+        wordCount: Math.max(3, Math.min(10, Number(saved.wordCount || state.wordCount || 5))),
+        onlineCheck: saved.onlineCheck !== false
+      };
+    }
+
+    function applyRematchRoleFromRoom(roomData = {}) {
+      const rematch = roomData.rematch;
+      if (!multiplayer.enabled || !rematch || !rematch.players) return false;
+      if (!["waiting", "ready", "playing"].includes(rematch.status)) return false;
+
+      const slot = getRematchSlot(rematch);
+      if (!slot) return false;
+
+      const previousPlayerNo = multiplayer.playerNo;
+      multiplayer.playerNo = slot;
+      multiplayer.isCreator = slot === 1;
+      multiplayer.ending = false;
+
+      state.p1 = rematchPlayerName(rematch, 1);
+      state.p2 = rematchPlayerName(rematch, 2);
+      const base = rematchBaseSettings(roomData);
+      state.totalSeries = base.totalSeries;
+      state.wordCount = base.wordCount;
+      state.startSetter = 1;
+      state.onlineCheck = base.onlineCheck;
+      state.lastSettings = {
+        p1: state.p1,
+        p2: state.p2,
+        totalSeries: state.totalSeries,
+        wordCount: state.wordCount,
+        startSetter: 1,
+        onlineCheck: state.onlineCheck
+      };
+
+      if (previousPlayerNo !== multiplayer.playerNo) updateScores();
+      return true;
+    }
+
+    async function handleOnlineRematchSnapshot(roomData = {}) {
+      if (!multiplayer.enabled || !multiplayer.roomRef) return;
+      const rematch = roomData.rematch;
+      if (!rematch || !rematch.status) return;
+
+      const slot = getRematchSlot(rematch);
+      if (!slot) return;
+
+      if (rematch.status === "waiting" && state.screen === "endScreen") {
+        $("waitingTitle").textContent = "Aynı ayarla tekrar oyun bekleniyor";
+        $("waitingText").textContent = slot === 1
+          ? "Bu turda oyunu sen kurdun. Diğer oyuncu da Aynı Ayarlarla Tekrar Oyna butonuna basınca oyun başlayacak."
+          : "Tekrar oyuna katıldın. Oyunu kuran telefon başlatmayı hazırlıyor.";
+        const info = $("waitingInfo");
+        if (info) {
+          info.className = "message online-status warn";
+          info.innerHTML = slot === 1
+            ? "Sen bu turun 1. oyuncususun. 2. oyuncu bekleniyor."
+            : "Sen bu turun 2. oyuncususun. Oyun başlamak üzere.";
+        }
+        activateScreen("waitingScreen");
+      }
+
+      if (rematch.status === "ready" && slot === 1) {
+        await startOnlineRematchAsCreator(roomData);
+      }
+    }
+
+    async function startOnlineRematchAsCreator(roomData = {}) {
+      const rematch = roomData.rematch;
+      if (!multiplayer.enabled || !multiplayer.roomRef || !rematch) return;
+      if (multiplayer.rematchRoundStarted === rematch.round) return;
+      multiplayer.rematchRoundStarted = rematch.round;
+
+      applyRematchRoleFromRoom(roomData);
+      resetTurn();
+      state.currentSeries = 1;
+      state.startSetter = 1;
+      state.setter = 1;
+      state.guesser = 2;
+      state.scores = {1: 0, 2: 0};
+      state.screen = "entryScreen";
+      showEntry();
+
+      try {
+        await multiplayer.roomRef.update({
+          status: "playing",
+          startedAt: firebase.database.ServerValue.TIMESTAMP,
+          creatorPlayerNo: 1,
+          createdBy: rematch.players?.["1"]?.clientId || multiplayer.clientId,
+          rematch: {
+            ...rematch,
+            status: "playing",
+            startedAt: Date.now()
+          },
+          players: {
+            1: {
+              name: state.p1,
+              role: "creator",
+              clientId: rematch.players?.["1"]?.clientId || multiplayer.clientId,
+              joinedAt: firebase.database.ServerValue.TIMESTAMP,
+              lastSeen: firebase.database.ServerValue.TIMESTAMP
+            },
+            2: {
+              name: state.p2,
+              role: "guest",
+              clientId: rematch.players?.["2"]?.clientId || "",
+              joinedAt: firebase.database.ServerValue.TIMESTAMP,
+              lastSeen: firebase.database.ServerValue.TIMESTAMP
+            }
+          },
+          gameState: serializableState()
+        });
+      } catch (e) {
+        setOnlineStatus("Aynı ayarla tekrar oyun başlatılamadı. Bağlantıyı kontrol et.", "bad");
+        multiplayer.rematchRoundStarted = null;
       }
     }
 
@@ -1659,7 +1827,9 @@
       } else if (state.screen === "entryScreen") {
         $("entrySeries").textContent = `Seri ${state.currentSeries}/${state.totalSeries}`;
         $("entryTitle").textContent = `${playerName(state.setter)} kelimeleri yazıyor`;
-        $("entrySubtitle").textContent = `${playerName(state.guesser)} bu kelimeleri tahmin edecek. Kelimeleri diğer oyuncuya göstermeden gir.`;
+        $("entrySubtitle").textContent = multiplayer.enabled && multiplayer.playerNo !== state.setter
+          ? `${playerName(state.setter)} kelimeleri giriyor. Sen ekranı canlı izlersin; gizli kelimeler gösterilmez.`
+          : `${playerName(state.guesser)} bu kelimeleri tahmin edecek. Kelimeleri diğer oyuncuya göstermeden gir.`;
         updateEntryChain();
         updateEntryLabel();
         activateScreen(visibleScreenFor("entryScreen"));
@@ -1677,7 +1847,7 @@
       }
 
       updateControlLocks();
-      setOnlineStatus(`Bağlandı: <strong>${multiplayer.roomName}</strong> · Bu telefon: <strong>${playerName(multiplayer.playerNo)}</strong>`, "good");
+      setOnlineStatus(`Bağlandı: <strong>${escapeHtml(multiplayer.roomName)}</strong> · Bu telefon: <strong>${safePlayerName(multiplayer.playerNo)}</strong>`, "good");
     }
 
     function updateControlLocks() {
@@ -1691,16 +1861,33 @@
       $("confirmWordBtn").disabled = !isSetterDevice || state.entryChecking || state.words.length >= state.wordCount;
       $("editLastWordBtn").disabled = !isSetterDevice || state.entryChecking || state.words.length === 0;
       $("passToGuesserBtn").disabled = !isSetterDevice || state.entryChecking || state.words.length !== state.wordCount;
+      if ($("clearWordsBtn")) $("clearWordsBtn").disabled = !isSetterDevice || state.entryChecking;
 
       $("guessWord").disabled = !isGuesserDevice || state.challengeChecking;
+      if ($("submitGuessBtn")) $("submitGuessBtn").disabled = !isGuesserDevice || state.challengeChecking;
+      if ($("challengeWordBtn")) $("challengeWordBtn").disabled = !isGuesserDevice || state.challengeChecking;
 
-      const guessButtons = document.querySelectorAll("#guessScreen button");
-      guessButtons.forEach(btn => {
-        const text = btn.textContent.trim();
-        if (text === "Tamam" || text.includes("Hatalı")) {
-          btn.disabled = !isGuesserDevice || state.challengeChecking;
-        }
-      });
+      applyPassiveViewNotice(isSetterDevice, isGuesserDevice);
+    }
+
+    function applyPassiveViewNotice(isSetterDevice, isGuesserDevice) {
+      if (!multiplayer.enabled) return;
+
+      if (state.screen === "entryScreen" && !isSetterDevice) {
+        setMessage(
+          "entryMessage",
+          `<div class="turn-lock-note">Sıra ${safePlayerName(state.setter)} oyuncusunda. Bu ekranı canlı izliyorsun; kelimeler gizli tutulur ve butonlar sende kilitlidir.</div>`,
+          "warn"
+        );
+      }
+
+      if (state.screen === "guessScreen" && !isGuesserDevice) {
+        setMessage(
+          "guessMessage",
+          `<div class="turn-lock-note">Sıra ${safePlayerName(state.guesser)} oyuncusunda. Tahmin ekranını canlı izliyorsun; butonlar sende kilitlidir.</div>`,
+          "warn"
+        );
+      }
     }
 
     async function createOnlineRoom() {
@@ -1765,9 +1952,10 @@
       });
 
       listenRoom();
+      setupDisconnectCleanup();
       clearSettingsForm();
       showScreen("settingsScreen");
-      setOnlineStatus(`Bağlantı oluşturuldu: <strong>${roomName}</strong>. Sadece kendi adını ve ayarları gir; sonra bekleme odası açılacak.`, "good");
+      setOnlineStatus(`Bağlantı oluşturuldu: <strong>${escapeHtml(roomName)}</strong>. Sadece kendi adını ve ayarları gir; sonra bekleme odası açılacak.`, "good");
     }
 
     async function joinOnlineRoom() {
@@ -1862,7 +2050,7 @@
             const waitingInfo = $("waitingInfo");
             if (waitingInfo) {
               waitingInfo.className = "message online-status warn";
-              waitingInfo.innerHTML = `Oyuncu adın kaydediliyor: <strong>${name}</strong>`;
+              waitingInfo.innerHTML = `Oyuncu adın kaydediliyor: <strong>${escapeHtml(name)}</strong>`;
             }
             activateScreen("waitingScreen");
             updateControlLocks();
@@ -1877,11 +2065,12 @@
               });
 
               listenRoom();
+              setupDisconnectCleanup();
               const latestSnap = await ref.once("value");
               const latestData = latestSnap.val() || data;
               applyPlayersToState(latestData.players || {});
               updateWaitingRoom(latestData);
-              setOnlineStatus(`Bağlandın: <strong>${roomName}</strong>. Oyuncu adın: <strong>${name}</strong>`, "good");
+              setOnlineStatus(`Bağlandın: <strong>${escapeHtml(roomName)}</strong>. Oyuncu adın: <strong>${escapeHtml(name)}</strong>`, "good");
             } catch (e) {
               playTone("error");
               leaveOnlineSilently();
@@ -1925,6 +2114,7 @@
     }
 
     function leaveOnlineSilently() {
+      clearDisconnectCleanup();
       if (multiplayer.roomRef) {
         multiplayer.roomRef.off();
       }
@@ -1938,7 +2128,24 @@
       multiplayer.roomRef = null;
       multiplayer.cancelling = false;
       multiplayer.ending = false;
+      multiplayer.rematchClaiming = false;
+      multiplayer.rematchRoundStarted = null;
       clearOnlineForm();
+    }
+
+    function setupDisconnectCleanup() {
+      if (!multiplayer.enabled || !multiplayer.roomRef || !multiplayer.roomRef.onDisconnect) return;
+      try {
+        multiplayer.roomRef.onDisconnect().remove();
+      } catch (e) {}
+    }
+
+    function clearDisconnectCleanup() {
+      if (!multiplayer.roomRef || !multiplayer.roomRef.onDisconnect) return;
+      try {
+        const task = multiplayer.roomRef.onDisconnect().cancel();
+        if (task && typeof task.catch === "function") task.catch(() => {});
+      } catch (e) {}
     }
 
 
@@ -2091,6 +2298,7 @@
       }
 
       multiplayer.cancelling = true;
+      clearDisconnectCleanup();
       clearTimeout(multiplayer.syncTimer);
       clearTimeout(multiplayer.cleanupTimer);
 
@@ -2135,12 +2343,7 @@
     function visibleScreenFor(id) {
       if (multiplayer.enabled && id === "settingsScreen" && !multiplayer.isCreator) {
         $("waitingTitle").textContent = "Oyun ayarları hazırlanıyor";
-        $("waitingText").textContent = "Bağlantı kuruldu. Bağlantıyı oluşturan telefon oyuncu adlarını ve oyun ayarlarını belirlediğinde oyun otomatik başlayacak.";
-        return "waitingScreen";
-      }
-      if (multiplayer.enabled && id === "entryScreen" && multiplayer.playerNo !== state.setter) {
-        $("waitingTitle").textContent = `${playerName(state.setter)} kelimeleri yazıyor`;
-        $("waitingText").textContent = "Kelimeler gizli tutuluyor. Karşı oyuncu “İkinci Kişiye Geç” dediğinde tahmin ekranı otomatik açılacak.";
+        $("waitingText").textContent = "Bağlantı kuruldu. Bağlantıyı oluşturan telefon oyuncu adını ve oyun ayarlarını belirlediğinde oyun otomatik başlayacak.";
         return "waitingScreen";
       }
       return id;
@@ -2156,6 +2359,19 @@
 
     function playerName(num) {
       return num === 1 ? state.p1 : state.p2;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function safePlayerName(num) {
+      return escapeHtml(playerName(num));
     }
 
     function normalizeText(text) {
@@ -2256,6 +2472,11 @@
 
     function restartSame() {
       if (!state.lastSettings) return backToMenu();
+      if (multiplayer.enabled) {
+        restartSameOnline();
+        return;
+      }
+
       state.p1 = state.lastSettings.p1;
       state.p2 = state.lastSettings.p2;
       state.totalSeries = state.lastSettings.totalSeries;
@@ -2271,6 +2492,89 @@
       showEntry();
     }
 
+    async function restartSameOnline() {
+      if (!multiplayer.enabled || !multiplayer.roomRef || multiplayer.rematchClaiming) return;
+      multiplayer.rematchClaiming = true;
+      closeModal();
+
+      const ownName = (playerName(multiplayer.playerNo) || state.p1 || state.p2 || "Oyuncu").trim().slice(0, 18) || "Oyuncu";
+      const clientId = multiplayer.clientId;
+      const baseSettings = {
+        totalSeries: Math.max(2, Math.min(10, Number(state.lastSettings?.totalSeries || state.totalSeries || 2))),
+        wordCount: Math.max(3, Math.min(10, Number(state.lastSettings?.wordCount || state.wordCount || 5))),
+        onlineCheck: state.lastSettings?.onlineCheck !== false
+      };
+
+      $("waitingTitle").textContent = "Aynı ayarla tekrar oyun hazırlanıyor";
+      $("waitingText").textContent = "İlk basan bu turun kurucusu, ikinci basan katılımcısı olur. Oda ve ayarlar korunur.";
+      const info = $("waitingInfo");
+      if (info) {
+        info.className = "message online-status warn";
+        info.innerHTML = "Tekrar oyun isteğin kaydediliyor.";
+      }
+      activateScreen("waitingScreen");
+
+      try {
+        await multiplayer.roomRef.child("rematch").transaction(current => {
+          const now = Date.now();
+          const ownRecord = {
+            clientId,
+            name: ownName,
+            joinedAt: now
+          };
+
+          if (!current || current.status === "playing" || current.status === "cancelled") {
+            return {
+              round: now,
+              status: "waiting",
+              settings: baseSettings,
+              players: {
+                1: ownRecord
+              },
+              createdAt: now
+            };
+          }
+
+          const players = current.players || {};
+          if (players["1"]?.clientId === clientId || players["2"]?.clientId === clientId) {
+            return current;
+          }
+
+          if (!players["1"]) {
+            players["1"] = ownRecord;
+          } else if (!players["2"]) {
+            players["2"] = ownRecord;
+          }
+
+          const next = {
+            ...current,
+            players,
+            settings: current.settings || baseSettings,
+            updatedAt: now
+          };
+
+          if (players["1"] && players["2"]) {
+            next.status = "ready";
+            next.readyAt = now;
+          }
+
+          return next;
+        });
+
+        const snap = await multiplayer.roomRef.once("value");
+        const roomData = snap.val();
+        if (roomData) {
+          applyRematchRoleFromRoom(roomData);
+          handleOnlineRematchSnapshot(roomData);
+        }
+      } catch (e) {
+        setOnlineStatus("Aynı ayarla tekrar oyun başlatılırken bağlantı sorunu oluştu.", "bad");
+        activateScreen("endScreen");
+      } finally {
+        multiplayer.rematchClaiming = false;
+      }
+    }
+
     function resetTurn() {
       state.words = [];
       state.guessIndex = 1;
@@ -2284,14 +2588,18 @@
       updateScores();
       $("entrySeries").textContent = `Seri ${state.currentSeries}/${state.totalSeries}`;
       $("entryTitle").textContent = `${playerName(state.setter)} kelimeleri yazıyor`;
-      $("entrySubtitle").textContent = `${playerName(state.guesser)} bu kelimeleri tahmin edecek. Kelimeleri diğer oyuncuya göstermeden gir.`;
+      $("entrySubtitle").textContent = multiplayer.enabled && multiplayer.playerNo !== state.setter
+        ? `${playerName(state.setter)} kelimeleri giriyor. Sen ekranı canlı izlersin; gizli kelimeler gösterilmez.`
+        : `${playerName(state.guesser)} bu kelimeleri tahmin edecek. Kelimeleri diğer oyuncuya göstermeden gir.`;
       $("entryWord").value = "";
       $("passToGuesserBtn").disabled = state.words.length !== state.wordCount;
       updateEntryChain();
       updateEntryLabel();
       setMessage("entryMessage", state.words.length === 0 ? "İlk kelimeyi yazıp onayla." : "Sıradaki kelimeyi yazıp onayla.");
       showScreen("entryScreen");
-      setTimeout(() => $("entryWord").focus(), 100);
+      if (!multiplayer.enabled || multiplayer.playerNo === state.setter) {
+        setTimeout(() => $("entryWord").focus(), 100);
+      }
     }
 
     function updateEntryLabel() {
@@ -2304,17 +2612,31 @@
     function updateEntryChain() {
       const chain = $("entryChain");
       chain.innerHTML = "";
+      const hideWords = multiplayer.enabled && multiplayer.playerNo !== state.setter;
+
       for (let i = 0; i < state.wordCount; i++) {
         const item = document.createElement("div");
-        item.className = "chain-item " + (state.words[i] ? "found" : "locked");
+        const hasWord = !!state.words[i];
+        item.className = "chain-item " + (hasWord ? "found" : "locked");
         item.dataset.num = `${i + 1}.`;
-        const word = state.words[i] || "—";
-        item.innerHTML = `<div class="chain-word">${word}</div><div class="chain-note">${state.words[i] ? "Onaylandı" : "Boş"}</div>`;
+
+        let word = state.words[i] || "—";
+        let note = hasWord ? "Onaylandı" : "Boş";
+        let extraClass = "";
+
+        if (hideWords) {
+          word = hasWord ? "✓ Kelime hazır" : "—";
+          note = hasWord ? "Gizli tutuluyor" : "Bekleniyor";
+          extraClass = " watching-word";
+        }
+
+        item.innerHTML = `<div class="chain-word${extraClass}">${escapeHtml(word)}</div><div class="chain-note">${escapeHtml(note)}</div>`;
         chain.appendChild(item);
       }
     }
 
     async function confirmEntryWord() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.setter) return;
       if (state.entryChecking || state.words.length >= state.wordCount) return;
 
       const input = $("entryWord");
@@ -2393,6 +2715,7 @@
     }
 
     function editLastWord() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.setter) return;
       if (state.words.length === 0) return;
       const lastWord = state.words.pop();
       $("entryWord").value = lastWord;
@@ -2407,6 +2730,7 @@
     }
 
     function clearCurrentWords() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.setter) return;
       resetTurn();
       updateEntryChain();
       updateEntryLabel();
@@ -2420,6 +2744,7 @@
     }
 
     function goToGuess() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.setter) return;
       if (state.words.length !== state.wordCount) {
         setMessage("entryMessage", `Tahmin aşamasına geçmek için ${state.wordCount} kelime onaylanmalı.`, "bad");
         return;
@@ -2428,6 +2753,7 @@
       state.attemptsLeft = 5;
       state.hadMistake = false;
       showGuess();
+      syncImmediately();
     }
 
     function showGuess() {
@@ -2440,7 +2766,9 @@
       updateAttempts();
       setMessage("guessMessage", "Tahminini büyük harfle yazmana gerek yok; oyun otomatik büyütür.");
       showScreen("guessScreen");
-      setTimeout(() => $("guessWord").focus(), 100);
+      if (!multiplayer.enabled || multiplayer.playerNo === state.guesser) {
+        setTimeout(() => $("guessWord").focus(), 100);
+      }
     }
 
     function maskWord(word) {
@@ -2494,6 +2822,7 @@
     }
 
     function submitGuess() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.guesser) return;
       if (state.guessIndex >= state.wordCount) return;
 
       const input = $("guessWord");
@@ -2522,8 +2851,8 @@
           setMessage(
             "guessMessage",
             state.hadMistake
-              ? `Tebrikler! Tüm kelimeler bulundu. ${playerName(state.guesser)} +1 puan kazandı.`
-              : `Harika! Hiç yanlış yapmadan tüm kelimeler bulundu. ${playerName(state.guesser)} +2 puan kazandı.`,
+              ? `Tebrikler! Tüm kelimeler bulundu. ${safePlayerName(state.guesser)} +1 puan kazandı.`
+              : `Harika! Hiç yanlış yapmadan tüm kelimeler bulundu. ${safePlayerName(state.guesser)} +2 puan kazandı.`,
             "good"
           );
           showTransition("Tur Tamamlandı", `${playerName(state.guesser)} bu turdan ${point} puan aldı.`, "Sıradaki Oyuncuya Geç", nextTurn);
@@ -2560,6 +2889,7 @@
     }
 
     async function challengeCurrentWord() {
+      if (multiplayer.enabled && multiplayer.playerNo !== state.guesser) return;
       if (state.challengeChecking || state.guessIndex >= state.wordCount) return;
 
       const previous = state.words[state.guessIndex - 1];
@@ -2624,6 +2954,7 @@
 
       resetTurn();
       showEntry();
+      syncImmediately();
     }
 
     function finishGame(sync = true) {
@@ -2637,9 +2968,26 @@
       $("winnerText").textContent = `${text} Son puan: ${state.p1} ${s1} - ${state.p2} ${s2}`;
       if (sync) {
         showScreen("endScreen");
-        cleanupOnlineRoomAfterEnd();
+        if (multiplayer.enabled) {
+          markOnlineGameEnded();
+        }
       } else {
         activateScreen("endScreen");
+      }
+    }
+
+    async function markOnlineGameEnded() {
+      if (!multiplayer.enabled || !multiplayer.roomRef) return;
+      try {
+        multiplayer.ending = true;
+        clearTimeout(multiplayer.syncTimer);
+        await multiplayer.roomRef.update({
+          status: "ended",
+          endedAt: firebase.database.ServerValue.TIMESTAMP,
+          gameState: serializableState()
+        });
+      } catch (e) {
+        scheduleSync();
       }
     }
 
@@ -2651,6 +2999,7 @@
       multiplayer.cleanupTimer = setTimeout(async () => {
         try {
           multiplayer.ending = true;
+          clearDisconnectCleanup();
           ref.off();
           await ref.update({ status: "ended", endedAt: firebase.database.ServerValue.TIMESTAMP });
           await ref.remove();
@@ -2781,25 +3130,38 @@
 
     async function validatePair(previous, current) {
       const candidates = phraseCandidates(previous, current);
+      const cacheKey = candidates.join("|");
+
+      if (VALIDATION_CACHE.has(cacheKey)) {
+        return VALIDATION_CACHE.get(cacheKey);
+      }
 
       for (const c of candidates) {
         if (LOCAL_VALID_PAIRS.has(c)) {
-          return {status: "valid", detail: `yerel örnek listede "${c}" bulundu`};
+          const localResult = {status: "valid", detail: `yerel örnek listede "${c}" bulundu`};
+          VALIDATION_CACHE.set(cacheKey, localResult);
+          return localResult;
         }
       }
 
       if (!state.onlineCheck) {
-        return {status: "uncertain", detail: "internet kontrolü kapalı; yalnızca yerel liste kontrol edildi"};
+        const offlineResult = {status: "uncertain", detail: "internet kontrolü kapalı; yalnızca yerel liste kontrol edildi"};
+        VALIDATION_CACHE.set(cacheKey, offlineResult);
+        return offlineResult;
       }
 
       try {
         const online = await searchTurkishWikipedia(candidates);
+        let result;
         if (online.found) {
-          return {status: "valid", detail: `Türkçe Vikipedi aramasında "${online.candidate}" ifadesi tam eşleşme olarak bulundu`};
+          result = {status: "valid", detail: `Türkçe Vikipedi aramasında "${online.candidate}" ifadesi tam eşleşme olarak bulundu`};
+        } else {
+          result = {status: "invalid", detail: `yerel listede ve hızlı Türkçe Vikipedi kontrolünde "${candidates.join(" / ")}" için yeterli kanıt bulunamadı`};
         }
-        return {status: "invalid", detail: `yerel listede ve Türkçe Vikipedi tam ifade aramasında "${candidates.join(" / ")}" için yeterli kanıt bulunamadı`};
+        VALIDATION_CACHE.set(cacheKey, result);
+        return result;
       } catch (e) {
-        return {status: "uncertain", detail: "çevrim içi kontrol yapılamadı; bağlantı veya tarayıcı izni sorunu olabilir"};
+        return {status: "uncertain", detail: "hızlı çevrim içi kontrol tamamlanamadı; oyun akışı yavaşlamasın diye kelime itiraz hakkıyla kabul edildi"};
       }
     }
 
@@ -2823,35 +3185,41 @@
     }
 
     async function searchTurkishWikipedia(candidates) {
-      for (const cand of candidates) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 4500);
+      const checks = candidates.map(checkWikipediaCandidate);
+      const results = await Promise.all(checks);
+      const found = results.find(item => item.found);
 
-        const url =
-          "https://tr.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=8&srsearch=" +
-          encodeURIComponent('"' + cand.toLocaleLowerCase("tr-TR") + '"');
-
-        try {
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timer);
-
-          if (!response.ok) continue;
-          const data = await response.json();
-          const results = data?.query?.search || [];
-
-          const exactEvidence = results.some(item => {
-            return containsExactPhrase(item.title || "", cand) || containsExactPhrase(item.snippet || "", cand);
-          });
-
-          if (exactEvidence) {
-            return {found: true, candidate: cand, checked: true};
-          }
-        } catch (e) {
-          clearTimeout(timer);
-          throw e;
-        }
+      if (found) return found;
+      if (results.length && results.every(item => item.error)) {
+        throw new Error("Wikipedia kontrolü tamamlanamadı");
       }
+
       return {found: false, checked: true};
+    }
+
+    async function checkWikipediaCandidate(cand) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), WIKI_SEARCH_TIMEOUT_MS);
+      const url =
+        "https://tr.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=5&srsearch=" +
+        encodeURIComponent('"' + cand.toLocaleLowerCase("tr-TR") + '"');
+
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+
+        if (!response.ok) return {found: false, candidate: cand, checked: true, error: true};
+        const data = await response.json();
+        const results = data?.query?.search || [];
+        const exactEvidence = results.some(item => {
+          return containsExactPhrase(item.title || "", cand) || containsExactPhrase(item.snippet || "", cand);
+        });
+
+        return {found: exactEvidence, candidate: cand, checked: true, error: false};
+      } catch (e) {
+        clearTimeout(timer);
+        return {found: false, candidate: cand, checked: false, error: true};
+      }
     }
 
     $("entryWord").addEventListener("input", (e) => {
@@ -2871,6 +3239,18 @@
 
     $("guessWord").addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitGuess();
+    });
+
+    window.addEventListener("pagehide", () => {
+      if (multiplayer.enabled && multiplayer.roomRef && !multiplayer.ending && !multiplayer.cancelling) {
+        try { multiplayer.roomRef.remove(); } catch (e) {}
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (multiplayer.enabled && multiplayer.roomRef && !multiplayer.ending && !multiplayer.cancelling) {
+        try { multiplayer.roomRef.remove(); } catch (e) {}
+      }
     });
 
     $("modalBackdrop").addEventListener("click", (e) => {
